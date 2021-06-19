@@ -1,3 +1,4 @@
+import React from "react";
 import {
   SortableItem,
   SortableItemOverlay,
@@ -5,7 +6,6 @@ import {
   SortableDroppableList,
 } from "./Sortable";
 import { Item, Lane, SortableDirection } from "./types";
-import React from "react";
 import { areEqualWithIndexPath } from "./helpers";
 
 interface ItemContentProps {

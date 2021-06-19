@@ -1,13 +1,4 @@
-import update from "immutability-helper";
-import {
-  closestCorners,
-  CollisionDetection,
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-} from "@dnd-kit/core";
-import { arrayMove } from "@dnd-kit/sortable";
+import { DndContext, DragOverlay } from "@dnd-kit/core";
 import React from "react";
 import "./App.css";
 import {
@@ -21,51 +12,74 @@ import {
   Lane,
   SortableDirection,
 } from "./components/types";
-import { dragToEmptyLane, dragToPopulatedLane } from "./components/helpers";
 import { ItemContent, LaneContent } from "./components/Presentation";
+import {
+  useCustomCollisionDetection,
+  useDragHandlers,
+} from "./components/helpers";
+
+const TEST_BOARD = [
+  {
+    id: "1",
+    title: "one",
+    items: [
+      { id: "1.1", title: "one.a" },
+      { id: "2.1", title: "two.a" },
+      { id: "3.1", title: "three.a" },
+    ],
+  },
+  {
+    id: "2",
+    title: "two",
+    items: [
+      { id: "1.2", title: "one.b" },
+      {
+        id: "2.2",
+        title:
+          "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur efficitur purus in commodo tristique. Sed ante sem, consequat quis arcu vitae, pretium dapibus augue.",
+      },
+      { id: "3.2", title: "three.b" },
+    ],
+  },
+  { id: "3", title: "three", items: [] },
+];
+
+function useBoardData() {
+  const laneState = React.useState<Lane[]>(TEST_BOARD);
+  const clonedLaneState = React.useState<Lane[] | null>(null);
+
+  const activeLaneState =
+    React.useState<DraggableItemContext<Lane> | null>(null);
+  const activeItemState =
+    React.useState<DraggableItemContext<Item> | null>(null);
+
+  return {
+    laneState,
+    clonedLaneState,
+    activeLaneState,
+    activeItemState,
+  };
+}
 
 function App() {
-  const [lanes, setLanes] = React.useState<Lane[]>([
-    {
-      id: "1",
-      title: "one",
-      items: [
-        { id: "1.1", title: "one.a" },
-        { id: "2.1", title: "two.a" },
-        { id: "3.1", title: "three.a" },
-      ],
-    },
-    {
-      id: "2",
-      title: "two",
-      items: [
-        { id: "1.2", title: "one.b" },
-        {
-          id: "2.2",
-          title:
-            "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur efficitur purus in commodo tristique. Sed ante sem, consequat quis arcu vitae, pretium dapibus augue.",
-        },
-        { id: "3.2", title: "three.b" },
-      ],
-    },
-    { id: "3", title: "three", items: [] },
-  ]);
+  const { laneState, clonedLaneState, activeLaneState, activeItemState } =
+    useBoardData();
 
-  const laneIds = React.useMemo(
-    () =>
-      lanes.reduce<{ [id: string]: true }>((mapped, lane) => {
-        mapped[lane.id] = true;
-        return mapped;
-      }, {}),
-    [lanes]
+  const { onDragStart, onDragCancel, onDragOver, onDragEnd } = useDragHandlers({
+    laneState,
+    clonedLaneState,
+    activeLaneState,
+    activeItemState,
+  });
+
+  const lanes = laneState[0];
+  const activeLane = activeLaneState[0];
+  const activeItem = activeItemState[0];
+
+  const collisionDetection = useCustomCollisionDetection(
+    laneState[0],
+    activeLane
   );
-
-  const [clonedLanes, setClonedLanes] = React.useState<Lane[] | null>(null);
-
-  const [activeLane, setActiveLane] =
-    React.useState<DraggableItemContext<Lane> | null>(null);
-  const [activeItem, setActiveItem] =
-    React.useState<DraggableItemContext<Item> | null>(null);
 
   let activeDrag = null;
 
@@ -90,180 +104,6 @@ function App() {
       </SortableItemOverlay>
     );
   }
-
-  const onDragStart = React.useCallback(
-    (e: DragStartEvent) => {
-      const activeData = e.active.data.current;
-
-      if (activeData?.type === "lane") {
-        const laneData = activeData as DraggableItemContext<Lane>;
-        setActiveLane(laneData);
-      } else if (activeData?.type === "item") {
-        const itemData = activeData as DraggableItemContext<Lane>;
-        setActiveItem(itemData);
-        setClonedLanes(lanes);
-      }
-    },
-    [lanes]
-  );
-
-  const onDragCancel = React.useCallback(() => {
-    if (activeLane) setActiveLane(null);
-    if (activeItem) setActiveItem(null);
-    if (clonedLanes) {
-      setLanes(clonedLanes);
-      setClonedLanes(null);
-    }
-  }, [clonedLanes, activeLane, activeItem]);
-
-  const onDragOver = React.useCallback(
-    ({ active, over }: DragEndEvent) => {
-      const activeData = active.data.current;
-      const overData = over?.data.current;
-
-      if (activeData?.type !== "item") {
-        return;
-      }
-
-      if (!over) {
-        if (clonedLanes) {
-          setLanes(clonedLanes);
-        }
-
-        return;
-      }
-
-      const source = activeData as DraggableItemContext<Item>;
-
-      if (overData?.type === "lane") {
-        const destination = overData as DraggableItemContext<Lane>;
-        const mutation = dragToEmptyLane(source, destination);
-
-        if (mutation) {
-          return setLanes(mutation);
-        }
-      }
-
-      const destination = overData as DraggableItemContext<Item>;
-      const mutation = dragToPopulatedLane(
-        lanes,
-        source,
-        destination,
-        active,
-        over
-      );
-
-      if (mutation) {
-        return setLanes(mutation);
-      }
-    },
-    [lanes, clonedLanes]
-  );
-
-  const onDragEnd = React.useCallback(
-    ({ active, over }: DragEndEvent) => {
-      const activeData = active?.data.current;
-      const overData = over?.data.current;
-
-      if (!over) {
-        if (clonedLanes) {
-          setLanes(clonedLanes);
-          setClonedLanes(null);
-        }
-        return;
-      }
-
-      if (overData?.type === "lane" && activeData?.type === "lane") {
-        // Sorting lanes
-        const destination = overData as DraggableItemContext<Lane>;
-        const [sourceListIndex] = activeData.indexPath;
-        const [destinationListIndex] = destination.indexPath;
-
-        if (sourceListIndex !== destinationListIndex) {
-          setLanes((lanes) =>
-            arrayMove(lanes, sourceListIndex, destinationListIndex)
-          );
-        }
-      } else if (overData?.type === "lane" && activeData?.type === "item") {
-        // Adding item to lane
-        const destination = overData as DraggableItemContext<Lane>;
-        const [sourceListIndex, sourceIndex] = activeData.indexPath;
-        const [destinationListIndex] = destination.indexPath;
-
-        // Same list
-        if (sourceListIndex === destinationListIndex) {
-          return;
-        }
-
-        return setLanes((lanes) => {
-          return update(lanes, {
-            [sourceListIndex]: {
-              items: {
-                $splice: [[sourceIndex, 1]],
-              },
-            },
-            [destinationListIndex]: {
-              items: {
-                $unshift: [lanes[sourceListIndex].items[sourceIndex]],
-              },
-            },
-          });
-        });
-      } else if (overData?.type === "item" && activeData?.type === "item") {
-        // Sorting items
-        const itemData = overData as DraggableItemContext<Item>;
-        const [sourceListIndex, sourceItemIndex] = activeData.indexPath;
-        const [destinationListIndex, destinationItemIndex] = itemData.indexPath;
-
-        if (
-          sourceListIndex === destinationListIndex &&
-          sourceItemIndex !== destinationItemIndex
-        ) {
-          setLanes((lanes) => {
-            return update(lanes, {
-              [destinationListIndex]: {
-                items: {
-                  $set: arrayMove(
-                    lanes[destinationListIndex].items,
-                    sourceItemIndex,
-                    destinationItemIndex
-                  ),
-                },
-              },
-            });
-          });
-        }
-      }
-
-      if (activeLane) setActiveLane(null);
-      if (activeItem) setActiveItem(null);
-      if (clonedLanes) setClonedLanes(null);
-    },
-    [activeItem, activeLane, clonedLanes]
-  );
-
-  const collisionDetection = React.useCallback<CollisionDetection>(
-    (entries, target) => {
-      if (activeLane) {
-        // Lanes can only collide with lanes
-        return closestCorners(
-          entries.filter((entry) => {
-            return !!laneIds[entry[0]];
-          }),
-          target
-        );
-      }
-
-      // Items can only collide with items
-      return closestCorners(
-        entries.filter((entry) => {
-          return !laneIds[entry[0]];
-        }),
-        target
-      );
-    },
-    [laneIds, activeLane]
-  );
 
   return (
     <div className="App">
