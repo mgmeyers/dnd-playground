@@ -1,5 +1,6 @@
 import update from "immutability-helper";
 import {
+  closestCorners,
   DndContext,
   DragEndEvent,
   DragOverlay,
@@ -242,6 +243,7 @@ function App() {
         onDragOver={onDragOver}
         onDragEnd={onDragEnd}
         sensors={sensors}
+        collisionDetection={closestCorners}
       >
         <SortableList
           list={lanes}
