@@ -1,13 +1,11 @@
 import update from "immutability-helper";
 import {
   closestCorners,
+  CollisionDetection,
   DndContext,
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import React from "react";
@@ -16,8 +14,13 @@ import {
   SortableList,
   SortableItem,
   SortableItemOverlay,
-} from "./components/SortableList";
-import { DraggableItemContext, Item, Lane, SortableDirection } from "./components/types";
+} from "./components/Sortable";
+import {
+  DraggableItemContext,
+  Item,
+  Lane,
+  SortableDirection,
+} from "./components/types";
 import { dragToEmptyLane, dragToPopulatedLane } from "./components/helpers";
 import { ItemContent, LaneContent } from "./components/Presentation";
 
@@ -47,18 +50,22 @@ function App() {
     },
     { id: "3", title: "three", items: [] },
   ]);
+
+  const laneIds = React.useMemo(
+    () =>
+      lanes.reduce<{ [id: string]: true }>((mapped, lane) => {
+        mapped[lane.id] = true;
+        return mapped;
+      }, {}),
+    [lanes]
+  );
+
   const [clonedLanes, setClonedLanes] = React.useState<Lane[] | null>(null);
 
   const [activeLane, setActiveLane] =
     React.useState<DraggableItemContext<Lane> | null>(null);
   const [activeItem, setActiveItem] =
     React.useState<DraggableItemContext<Item> | null>(null);
-
-  const sensors = useSensors(
-    // useSensor(MouseSensor),
-    useSensor(PointerSensor)
-    // useSensor(KeyboardSensor)
-  );
 
   let activeDrag = null;
 
@@ -235,6 +242,29 @@ function App() {
     [activeItem, activeLane, clonedLanes]
   );
 
+  const collisionDetection = React.useCallback<CollisionDetection>(
+    (entries, target) => {
+      if (activeLane) {
+        // Lanes can only collide with lanes
+        return closestCorners(
+          entries.filter((entry) => {
+            return !!laneIds[entry[0]];
+          }),
+          target
+        );
+      }
+
+      // Items can only collide with items
+      return closestCorners(
+        entries.filter((entry) => {
+          return !laneIds[entry[0]];
+        }),
+        target
+      );
+    },
+    [laneIds, activeLane]
+  );
+
   return (
     <div className="App">
       <DndContext
@@ -242,14 +272,16 @@ function App() {
         onDragCancel={onDragCancel}
         onDragOver={onDragOver}
         onDragEnd={onDragEnd}
-        sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={collisionDetection}
       >
         <SortableList
           list={lanes}
           id="base"
           accepts="lane"
           direction={SortableDirection.Horizontal}
+          ctx={{
+            indexPath: [],
+          }}
         >
           {lanes.map((lane, i) => (
             <SortableItem

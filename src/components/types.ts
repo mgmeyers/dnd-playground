@@ -10,6 +10,10 @@ export interface DraggableItemContext<T> {
   data: T;
 }
 
+export interface DraggableListContext {
+  indexPath: number[];
+}
+
 export interface WithId {
   id: string;
 }

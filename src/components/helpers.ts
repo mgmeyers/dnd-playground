@@ -7,7 +7,9 @@ import { DraggableItemContext, Item, Lane, SortableDirection } from "./types";
 import { Active } from "@dnd-kit/core";
 import { Over } from "@dnd-kit/core";
 
-export function arraysAreEqual(a: any[], b: any[]) {
+export type MapAny = { [k: string]: any };
+
+export function areArraysEqual(a: any[], b: any[]) {
   return (
     Array.isArray(a) &&
     Array.isArray(b) &&
@@ -16,16 +18,76 @@ export function arraysAreEqual(a: any[], b: any[]) {
   );
 }
 
-export function ctxAreEqual<A, B>(
-  a: DraggableItemContext<A>,
-  b: DraggableItemContext<B>
-) {
-  return (
-    a.type === b.type &&
-    a.containingListId === b.containingListId &&
-    arraysAreEqual(a.indexPath, b.indexPath) &&
-    (a.data as any) === (b.data as any)
-  );
+function is(x: any, y: any): boolean {
+  if (x === y) {
+    return x !== 0 || y !== 0 || 1 / x === 1 / y;
+  } else {
+    // eslint-disable-next-line
+    return x !== x && y !== y;
+  }
+}
+
+type CustomComparator = (k: string, a: any, b: any) => boolean;
+
+export function shallowEqual(
+  objA: MapAny,
+  objB: MapAny,
+  customCompare: CustomComparator = () => false
+): boolean {
+  if (is(objA, objB)) {
+    return true;
+  }
+
+  if (
+    typeof objA !== "object" ||
+    objA === null ||
+    typeof objB !== "object" ||
+    objB === null
+  ) {
+    return false;
+  }
+
+  const keysA = Object.keys(objA);
+  const keysB = Object.keys(objB);
+
+  if (keysA.length !== keysB.length) {
+    return false;
+  }
+
+  // Test for A's keys different from B.
+  for (let i = 0; i < keysA.length; i++) {
+    if (!Object.prototype.hasOwnProperty.call(objB, keysA[i])) {
+      return false;
+    }
+    if (
+      !is(objA[keysA[i]], objB[keysA[i]]) &&
+      !customCompare(keysA[i], objA[keysA[i]], objB[keysA[i]])
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+export function areEqualWithIndexPath(objA: MapAny, objB: MapAny) {
+  return shallowEqual(objA, objB, (k, a, b) => {
+    if (k === "indexPath") {
+      return areArraysEqual(a, b);
+    }
+
+    return false;
+  });
+}
+
+export function areEqualWithCtx(objA: MapAny, objB: MapAny) {
+  return shallowEqual(objA, objB, (k, a, b) => {
+    if (k === "ctx") {
+      return areEqualWithIndexPath(a, b);
+    }
+
+    return false;
+  });
 }
 
 export function getStrategy(direction: SortableDirection) {
@@ -41,23 +103,24 @@ export function dragToEmptyLane(
   source: DraggableItemContext<Item>,
   destination: DraggableItemContext<Lane>
 ) {
-  const sourceIndex = source.indexPath[1];
+  const [sourceLaneIndex, sourceItemIndex] = source.indexPath;
+  const [destinationLaneIndex] = destination.indexPath;
 
   // Same list
-  if (source.indexPath[0] === destination.indexPath[0]) {
+  if (sourceLaneIndex === destinationLaneIndex) {
     return;
   }
 
   return (lanes: Lane[]) => {
     return update(lanes, {
-      [source.indexPath[0]]: {
+      [sourceLaneIndex]: {
         items: {
-          $splice: [[sourceIndex, 1]],
+          $splice: [[sourceItemIndex, 1]],
         },
       },
-      [destination.indexPath[0]]: {
+      [destinationLaneIndex]: {
         items: {
-          $push: [source.data],
+          $unshift: [lanes[sourceLaneIndex].items[sourceItemIndex]],
         },
       },
     });

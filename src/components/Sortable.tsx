@@ -3,8 +3,13 @@ import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import React from "react";
 import { useDroppable } from "@dnd-kit/core";
 import classcat from "classcat";
-import { DraggableItemContext, SortableDirection, WithId } from "./types";
-import { ctxAreEqual, getStrategy } from "./helpers";
+import {
+  DraggableItemContext,
+  DraggableListContext,
+  SortableDirection,
+  WithId,
+} from "./types";
+import { areEqualWithCtx, getStrategy } from "./helpers";
 
 function useListClasses({
   direction,
@@ -51,6 +56,7 @@ export interface SortableListProps<T> {
   accepts: string;
   list: Array<T>;
   id: string;
+  ctx: DraggableListContext;
   className?: string;
 }
 
@@ -70,13 +76,18 @@ export const SortableList = React.memo(function SortableList<
       strategy={getStrategy(direction)}
     >
       <div
-        className={useListClasses({ direction, isDroppable: false, className })}
+        className={useListClasses({
+          direction,
+          isDroppable: false,
+          className,
+        })}
       >
         {children}
       </div>
     </SortableContext>
   );
-});
+},
+areEqualWithCtx);
 
 export const SortableDroppableList = React.memo(function SortableDroppableList<
   ListType extends WithId
@@ -87,10 +98,12 @@ export const SortableDroppableList = React.memo(function SortableDroppableList<
   direction,
   children,
   className,
+  ctx,
 }: React.PropsWithChildren<SortableListProps<ListType>>) {
   const sortableId = `sortable-${id}`;
   const { active, over, isOver, setNodeRef } = useDroppable({
-    id,
+    id: `droppable-${id}`,
+    data: ctx,
   });
 
   const isDropzoneHovered =
@@ -116,7 +129,8 @@ export const SortableDroppableList = React.memo(function SortableDroppableList<
       </div>
     </SortableContext>
   );
-});
+},
+areEqualWithCtx);
 
 export const SortableListOverlay = React.memo(function SortableListOverlay<
   ListType extends WithId
@@ -132,7 +146,8 @@ export const SortableListOverlay = React.memo(function SortableListOverlay<
       {children}
     </div>
   );
-});
+},
+areEqualWithCtx);
 
 interface SortableItemProps<T> {
   id: string;
@@ -140,52 +155,43 @@ interface SortableItemProps<T> {
   ctx: DraggableItemContext<T>;
 }
 
-export const SortableItem = React.memo(
-  function SortableItem<T>({
+export const SortableItem = React.memo(function SortableItem<T>({
+  id,
+  className,
+  children,
+  ctx,
+}: React.PropsWithChildren<SortableItemProps<T>>) {
+  const {
+    attributes,
+    isDragging,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({
     id,
-    className,
-    children,
-    ctx,
-  }: React.PropsWithChildren<SortableItemProps<T>>) {
-    const {
-      attributes,
-      isDragging,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-    } = useSortable({
-      id,
-      data: ctx,
-    });
+    data: ctx,
+  });
 
-    const style = {
-      transform: CSS.Translate.toString(transform),
-      transition: transition || undefined,
-      // touchAction: "none",
-    };
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition: transition || undefined,
+    // touchAction: "none",
+  };
 
-    return (
-      <div
-        style={style}
-        ref={setNodeRef}
-        className={useItemClasses({ isDragging, isOverlay: false, className })}
-        {...listeners}
-        {...attributes}
-      >
-        {children}
-      </div>
-    );
-  },
-  (prev, next) => {
-    return (
-      prev.id === next.id &&
-      prev.className === next.className &&
-      prev.children === next.children &&
-      ctxAreEqual(prev.ctx, next.ctx)
-    );
-  }
-);
+  return (
+    <div
+      style={style}
+      ref={setNodeRef}
+      className={useItemClasses({ isDragging, isOverlay: false, className })}
+      {...listeners}
+      {...attributes}
+    >
+      {children}
+    </div>
+  );
+},
+areEqualWithCtx);
 
 export const SortableItemOverlay = React.memo(function SortableItemOverlay<T>({
   className,
