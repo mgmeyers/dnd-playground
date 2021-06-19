@@ -1,9 +1,9 @@
 import { DndContext, DragOverlay } from "@dnd-kit/core";
 import React from "react";
+import { LoremIpsum } from "lorem-ipsum";
 import "./App.css";
 import {
   SortableList,
-  SortableItem,
   SortableItemOverlay,
 } from "./components/Sortable";
 import {
@@ -12,37 +12,47 @@ import {
   Lane,
   SortableDirection,
 } from "./components/types";
-import { ItemContent, LaneContent } from "./components/Presentation";
+import { ItemContent, LaneContent, SortableLane } from "./components/Presentation";
 import {
   useCustomCollisionDetection,
   useDragHandlers,
 } from "./components/helpers";
+import { createPortal } from "react-dom";
 
-const TEST_BOARD = [
-  {
-    id: "1",
-    title: "one",
-    items: [
-      { id: "1.1", title: "one.a" },
-      { id: "2.1", title: "two.a" },
-      { id: "3.1", title: "three.a" },
-    ],
-  },
-  {
-    id: "2",
-    title: "two",
-    items: [
-      { id: "1.2", title: "one.b" },
-      {
-        id: "2.2",
-        title:
-          "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur efficitur purus in commodo tristique. Sed ante sem, consequat quis arcu vitae, pretium dapibus augue.",
-      },
-      { id: "3.2", title: "three.b" },
-    ],
-  },
-  { id: "3", title: "three", items: [] },
-];
+function generateInstanceId(): string {
+  return Math.random().toString(36).substr(2, 9);
+}
+
+function generateItems(n: number) {
+  const items: Item[] = [];
+  const l = new LoremIpsum();
+
+  for (let i = 0; i < n; i++) {
+    items.push({
+      id: generateInstanceId(),
+      title: l.generateSentences(1),
+    });
+  }
+
+  return items;
+}
+
+function generateLanes(n: number) {
+  const lanes: Lane[] = [];
+  const l = new LoremIpsum();
+
+  for (let i = 0; i < n; i++) {
+    lanes.push({
+      id: generateInstanceId(),
+      title: l.generateWords(3),
+      items: generateItems(20),
+    });
+  }
+
+  return lanes;
+}
+
+const TEST_BOARD = generateLanes(8);
 
 function useBoardData() {
   const laneState = React.useState<Lane[]>(TEST_BOARD);
@@ -106,42 +116,34 @@ function App() {
   }
 
   return (
-    <div className="App">
-      <DndContext
-        onDragStart={onDragStart}
-        onDragCancel={onDragCancel}
-        onDragOver={onDragOver}
-        onDragEnd={onDragEnd}
-        collisionDetection={collisionDetection}
-      >
-        <SortableList
-          list={lanes}
-          id="base"
-          accepts="lane"
-          direction={SortableDirection.Horizontal}
-          ctx={{
-            indexPath: [],
-          }}
+    <>
+      <div className="app-header">Lorem Ipsum</div>
+      <div className="app">
+        <DndContext
+          onDragStart={onDragStart}
+          onDragCancel={onDragCancel}
+          onDragOver={onDragOver}
+          onDragEnd={onDragEnd}
+          collisionDetection={collisionDetection}
         >
-          {lanes.map((lane, i) => (
-            <SortableItem
-              className="lane"
-              ctx={{
-                type: "lane",
-                containingListId: "base",
-                indexPath: [i],
-                data: lane,
-              }}
-              key={lane.id}
-              id={lane.id}
-            >
-              <LaneContent indexPath={[i]} lane={lane} />
-            </SortableItem>
-          ))}
-        </SortableList>
-        <DragOverlay>{activeDrag}</DragOverlay>
-      </DndContext>
-    </div>
+          <SortableList
+            className="board"
+            list={lanes}
+            id="base"
+            accepts="lane"
+            direction={SortableDirection.Horizontal}
+            ctx={{
+              indexPath: [],
+            }}
+          >
+            {lanes.map((lane, i) => (
+              <SortableLane key={lane.id} lane={lane} laneIndex={i} />
+            ))}
+          </SortableList>
+          {createPortal(<DragOverlay>{activeDrag}</DragOverlay>, document.body)}
+        </DndContext>
+      </div>
+    </>
   );
 }
 

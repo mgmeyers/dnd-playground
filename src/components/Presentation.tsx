@@ -12,9 +12,11 @@ interface ItemContentProps {
   item: Item;
 }
 
-export function ItemContent({ item }: ItemContentProps) {
+export const ItemContent = React.memo(function ItemContent({
+  item,
+}: ItemContentProps) {
   return <div>{item.title}</div>;
-}
+});
 
 interface LaneContentProps {
   lane: Lane;
@@ -28,38 +30,88 @@ export const LaneContent = React.memo(function LaneContent({
   isOverlay,
 }: LaneContentProps) {
   const ListElement = isOverlay ? SortableListOverlay : SortableDroppableList;
-  const ItemElement = isOverlay ? SortableItemOverlay : SortableItem;
 
   return (
     <div>
       <div className="lane-title">{lane.title}</div>
-      <ListElement
-        className="lane-items"
-        list={lane.items}
-        id={lane.id}
-        accepts="item"
-        direction={SortableDirection.Vertical}
-        ctx={{
-          indexPath,
-        }}
-      >
-        {lane.items.map((item, i) => (
-          <ItemElement
-            className="item"
-            ctx={{
-              type: "item",
-              containingListId: lane.id,
-              indexPath: [...indexPath, i],
-              data: item,
-            }}
-            key={item.id}
-            id={item.id}
-          >
-            <ItemContent item={item} />
-          </ItemElement>
-        ))}
-      </ListElement>
+      <div className="lane-items">
+        <ListElement
+          list={lane.items}
+          id={lane.id}
+          accepts="item"
+          direction={SortableDirection.Vertical}
+          ctx={{
+            indexPath,
+          }}
+        >
+          {lane.items.map((item, i) => (
+            <SortableCard
+              key={item.id}
+              isOverlay={!!isOverlay}
+              item={item}
+              itemIndex={i}
+              laneId={lane.id}
+              laneIndexPath={indexPath}
+            />
+          ))}
+        </ListElement>
+      </div>
     </div>
   );
 },
 areEqualWithIndexPath);
+
+export const SortableCard = React.memo(function SortableCard({
+  isOverlay,
+  item,
+  itemIndex,
+  laneId,
+  laneIndexPath,
+}: {
+  isOverlay: boolean;
+  item: Item;
+  itemIndex: number;
+  laneId: string;
+  laneIndexPath: number[];
+}) {
+  const ItemElement = isOverlay ? SortableItemOverlay : SortableItem;
+
+  return (
+    <ItemElement
+      className="item"
+      ctx={{
+        type: "item",
+        containingListId: laneId,
+        indexPath: [...laneIndexPath, itemIndex],
+        data: item,
+      }}
+      id={item.id}
+    >
+      <ItemContent item={item} />
+    </ItemElement>
+  );
+},
+areEqualWithIndexPath);
+
+export const SortableLane = React.memo(function SortableLane({
+  lane,
+  laneIndex,
+}: {
+  lane: Lane;
+  laneIndex: number;
+}) {
+  return (
+    <SortableItem
+      className="lane"
+      ctx={{
+        type: "lane",
+        containingListId: "base",
+        indexPath: [laneIndex],
+        data: lane,
+      }}
+      id={lane.id}
+    >
+      <LaneContent indexPath={[laneIndex]} lane={lane} />
+    </SortableItem>
+  );
+});

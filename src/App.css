@@ -1,5 +1,38 @@
-.App {
+#root,
+html,
+body {
+  height: 100%;
+  width: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-header {
   padding: 20px;
+  flex-shrink: 0;
+  flex-grow: 0;
+}
+
+.app {
+  padding: 20px;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.board {
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .sortable-list-horizontal {
@@ -22,10 +55,21 @@
   border-radius: 10px;
   padding: 15px;
   width: 272px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.lane > div {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
 .lane-title {
   padding: 0 0 20px;
+  flex-grow: 0;
+  flex-shrink: 0;
 }
 
 .lane.is-dragging {
@@ -45,8 +89,20 @@
 
 .lane-items {
   padding: 5px;
+  min-height: 0;
+  height: 100%;
+}
+
+.lane-items > div {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .is-active-dropzone {
   background-color: lightgreen;
+}
+
+.draggable-item {
+  touch-action: none;
 }

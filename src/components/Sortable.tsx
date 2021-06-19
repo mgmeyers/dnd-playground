@@ -44,6 +44,7 @@ function useItemClasses({
 }) {
   return classcat([
     className,
+    "draggable-item",
     {
       "is-dragging": isDragging,
       "is-overlay": isOverlay,
@@ -162,6 +163,7 @@ export const SortableItem = React.memo(function SortableItem<T>({
   ctx,
 }: React.PropsWithChildren<SortableItemProps<T>>) {
   const {
+    active,
     attributes,
     isDragging,
     listeners,
@@ -173,11 +175,17 @@ export const SortableItem = React.memo(function SortableItem<T>({
     data: ctx,
   });
 
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    transition: transition || undefined,
-    // touchAction: "none",
-  };
+  const isTypeSorting = active?.data.current?.type === ctx.type;
+  const style = React.useMemo(
+    () =>
+      isTypeSorting
+        ? {
+            transform: CSS.Translate.toString(transform),
+            transition: transition || undefined,
+          }
+        : undefined,
+    [isTypeSorting, transform, transition]
+  );
 
   return (
     <div
