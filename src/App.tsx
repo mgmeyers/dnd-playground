@@ -2,22 +2,16 @@ import { DndContext, DragOverlay } from "@dnd-kit/core";
 import React from "react";
 import { LoremIpsum } from "lorem-ipsum";
 import "./App.css";
-import {
-  SortableList,
-  SortableItemOverlay,
-} from "./components/Sortable";
-import {
-  DraggableItemContext,
-  Item,
-  Lane,
-  SortableDirection,
-} from "./components/types";
-import { ItemContent, LaneContent, SortableLane } from "./components/Presentation";
+import { SortableItemOverlay } from "./components/SortableItem";
+import { DragContext, Item, Lane, SortableDirection } from "./components/types";
+import { LaneContent, SortableLane } from "./components/Lane";
 import {
   useCustomCollisionDetection,
   useDragHandlers,
 } from "./components/helpers";
 import { createPortal } from "react-dom";
+import { SortableList } from "./components/SortableList";
+import { CardContent } from "./components/Card";
 
 function generateInstanceId(): string {
   return Math.random().toString(36).substr(2, 9);
@@ -30,7 +24,11 @@ function generateItems(n: number) {
   for (let i = 0; i < n; i++) {
     items.push({
       id: generateInstanceId(),
-      title: l.generateSentences(1),
+      type: "item",
+      data: {
+        title: l.generateSentences(1),
+      },
+      children: [],
     });
   }
 
@@ -44,8 +42,11 @@ function generateLanes(n: number) {
   for (let i = 0; i < n; i++) {
     lanes.push({
       id: generateInstanceId(),
-      title: l.generateWords(3),
-      items: generateItems(20),
+      type: "lane",
+      data: {
+        title: l.generateWords(3),
+      },
+      children: generateItems(20),
     });
   }
 
@@ -58,10 +59,8 @@ function useBoardData() {
   const laneState = React.useState<Lane[]>(TEST_BOARD);
   const clonedLaneState = React.useState<Lane[] | null>(null);
 
-  const activeLaneState =
-    React.useState<DraggableItemContext<Lane> | null>(null);
-  const activeItemState =
-    React.useState<DraggableItemContext<Item> | null>(null);
+  const activeLaneState = React.useState<DragContext<Lane> | null>(null);
+  const activeItemState = React.useState<DragContext<Item> | null>(null);
 
   return {
     laneState,
@@ -70,6 +69,12 @@ function useBoardData() {
     activeItemState,
   };
 }
+
+const rootContext = {
+  parentId: null,
+  indexPath: [],
+  data: {},
+};
 
 function App() {
   const { laneState, clonedLaneState, activeLaneState, activeItemState } =
@@ -95,25 +100,31 @@ function App() {
 
   if (activeLane) {
     activeDrag = (
-      <SortableItemOverlay
-        id={activeLane.data.id}
-        ctx={activeLane}
-        className="lane"
-      >
-        <LaneContent lane={activeLane.data} isOverlay={true} />
+      <SortableItemOverlay ctx={activeLane} className="lane">
+        <LaneContent
+          parentId={activeLane.parentId as string}
+          lane={activeLane.data}
+          indexPath={activeLane.indexPath}
+          isOverlay={true}
+        />
       </SortableItemOverlay>
     );
   } else if (activeItem) {
     activeDrag = (
-      <SortableItemOverlay
-        id={activeItem.data.id}
-        ctx={activeItem}
-        className="item"
-      >
-        <ItemContent item={activeItem.data} />
+      <SortableItemOverlay ctx={activeItem} className="item">
+        <CardContent item={activeItem.data} />
       </SortableItemOverlay>
     );
   }
+
+  const rootContent = React.useMemo(() => {
+    return {
+      id: "root",
+      type: "root",
+      children: lanes,
+      data: {},
+    };
+  }, [lanes]);
 
   return (
     <>
@@ -128,16 +139,18 @@ function App() {
         >
           <SortableList
             className="board"
-            list={lanes}
-            id="base"
             accepts="lane"
             direction={SortableDirection.Horizontal}
-            ctx={{
-              indexPath: [],
-            }}
+            content={rootContent}
+            ctx={rootContext}
           >
             {lanes.map((lane, i) => (
-              <SortableLane key={lane.id} lane={lane} laneIndex={i} />
+              <SortableLane
+                key={lane.id}
+                parentId="root"
+                lane={lane}
+                laneIndex={i}
+              />
             ))}
           </SortableList>
           {createPortal(<DragOverlay>{activeDrag}</DragOverlay>, document.body)}

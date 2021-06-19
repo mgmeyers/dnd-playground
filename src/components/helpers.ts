@@ -11,7 +11,13 @@ import {
   horizontalListSortingStrategy,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { DraggableItemContext, Item, Lane, SortableDirection } from "./types";
+import {
+  DragContext,
+  Item,
+  Lane,
+  NestableProps,
+  SortableDirection,
+} from "./types";
 
 export type MapAny = { [k: string]: any };
 
@@ -106,8 +112,8 @@ export function getStrategy(direction: SortableDirection) {
 }
 
 export function dragToEmptyLane(
-  source: DraggableItemContext<Item>,
-  destination: DraggableItemContext<Lane>
+  source: DragContext<Item>,
+  destination: DragContext<Lane>
 ) {
   const [sourceLaneIndex, sourceItemIndex] = source.indexPath;
   const [destinationLaneIndex] = destination.indexPath;
@@ -120,13 +126,13 @@ export function dragToEmptyLane(
   return (lanes: Lane[]) => {
     return update(lanes, {
       [sourceLaneIndex]: {
-        items: {
+        children: {
           $splice: [[sourceItemIndex, 1]],
         },
       },
       [destinationLaneIndex]: {
-        items: {
-          $unshift: [lanes[sourceLaneIndex].items[sourceItemIndex]],
+        children: {
+          $unshift: [lanes[sourceLaneIndex].children[sourceItemIndex]],
         },
       },
     });
@@ -135,8 +141,8 @@ export function dragToEmptyLane(
 
 export function dragToPopulatedLane(
   lanes: Lane[],
-  source: DraggableItemContext<Item>,
-  destination: DraggableItemContext<Item>
+  source: DragContext<Item>,
+  destination: DragContext<Item>
 ) {
   const [sourceListIndex, sourceItemIndex] = source.indexPath;
   const [destinationListIndex, destinationItemIndex] = destination.indexPath;
@@ -152,12 +158,12 @@ export function dragToPopulatedLane(
     return (lanes: Lane[]) => {
       return update(lanes, {
         [sourceListIndex]: {
-          items: {
+          children: {
             $splice: [[sourceItemIndex, 1]],
           },
         },
         [destinationListIndex]: {
-          items: {
+          children: {
             $splice: [[destinationItemIndex, 0, source.data]],
           },
         },
@@ -178,12 +184,12 @@ export function useDragHandlers({
     React.Dispatch<React.SetStateAction<Lane[] | null>>
   ];
   activeLaneState: [
-    DraggableItemContext<Lane> | null,
-    React.Dispatch<React.SetStateAction<DraggableItemContext<Lane> | null>>
+    DragContext<Lane> | null,
+    React.Dispatch<React.SetStateAction<DragContext<Lane> | null>>
   ];
   activeItemState: [
-    DraggableItemContext<Item> | null,
-    React.Dispatch<React.SetStateAction<DraggableItemContext<Item> | null>>
+    DragContext<Item> | null,
+    React.Dispatch<React.SetStateAction<DragContext<Item> | null>>
   ];
 }) {
   const [lanes, setLanes] = laneState;
@@ -193,18 +199,24 @@ export function useDragHandlers({
 
   const onDragStart = React.useCallback(
     (e: DragStartEvent) => {
-      const activeData = e.active.data.current;
+      const active = e.active.data.current as DragContext<NestableProps>;
 
-      if (activeData?.type === "lane") {
-        const laneData = activeData as DraggableItemContext<Lane>;
+      if (active?.data.type === "lane") {
+        const laneData = active as DragContext<Lane>;
         setActiveLane(laneData);
-      } else if (activeData?.type === "item") {
-        const itemData = activeData as DraggableItemContext<Item>;
+      } else if (active?.data.type === "item") {
+        const itemData = active as DragContext<Item>;
         setActiveItem(itemData);
         setClonedLanes(lanes);
       }
     },
-    [lanes, setActiveLane, setActiveItem, setClonedLanes]
+    [
+      lanes,
+      // These don't change, but tslint complains
+      setActiveLane,
+      setActiveItem,
+      setClonedLanes,
+    ]
   );
 
   const onDragCancel = React.useCallback(() => {
@@ -218,6 +230,7 @@ export function useDragHandlers({
     clonedLanes,
     activeLane,
     activeItem,
+    // These don't change, but tslint complains
     setActiveLane,
     setActiveItem,
     setLanes,
@@ -225,11 +238,11 @@ export function useDragHandlers({
   ]);
 
   const onDragOver = React.useCallback(
-    ({ active, over }: DragEndEvent) => {
-      const activeData = active.data.current;
-      const overData = over?.data.current;
+    (e: DragEndEvent) => {
+      const active = e.active.data.current as DragContext<NestableProps>;
+      const over = e.over?.data.current as DragContext<NestableProps>;
 
-      if (activeData?.type !== "item") {
+      if (active.data.type !== "item") {
         return;
       }
 
@@ -241,10 +254,10 @@ export function useDragHandlers({
         return;
       }
 
-      const source = activeData as DraggableItemContext<Item>;
+      const source = active as DragContext<Item>;
 
-      if (overData?.type === "lane") {
-        const destination = overData as DraggableItemContext<Lane>;
+      if (over.data.type === "lane") {
+        const destination = over as DragContext<Lane>;
         const mutation = dragToEmptyLane(source, destination);
 
         if (mutation) {
@@ -252,33 +265,42 @@ export function useDragHandlers({
         }
       }
 
-      const destination = overData as DraggableItemContext<Item>;
+      const destination = over as DragContext<Item>;
       const mutation = dragToPopulatedLane(lanes, source, destination);
 
       if (mutation) {
         return setLanes(mutation);
       }
     },
-    [lanes, clonedLanes, setLanes]
+    [
+      lanes,
+      clonedLanes,
+      // These don't change, but tslint complains
+      setLanes,
+    ]
   );
 
   const onDragEnd = React.useCallback(
-    ({ active, over }: DragEndEvent) => {
-      const activeData = active?.data.current;
-      const overData = over?.data.current;
+    (e: DragEndEvent) => {
+      const active = e.active.data.current as DragContext<NestableProps>;
+      const over = e.over?.data.current as DragContext<NestableProps>;
 
       if (!over) {
         if (clonedLanes) {
           setLanes(clonedLanes);
           setClonedLanes(null);
         }
+
+        if (activeLane) setActiveLane(null);
+        if (activeItem) setActiveItem(null);
+
         return;
       }
 
-      if (overData?.type === "lane" && activeData?.type === "lane") {
+      if (over.data.type === "lane" && active.data.type === "lane") {
         // Sorting lanes
-        const destination = overData as DraggableItemContext<Lane>;
-        const [sourceListIndex] = activeData.indexPath;
+        const destination = over as DragContext<Lane>;
+        const [sourceListIndex] = active.indexPath;
         const [destinationListIndex] = destination.indexPath;
 
         if (sourceListIndex !== destinationListIndex) {
@@ -286,10 +308,10 @@ export function useDragHandlers({
             arrayMove(lanes, sourceListIndex, destinationListIndex)
           );
         }
-      } else if (overData?.type === "lane" && activeData?.type === "item") {
+      } else if (over.data.type === "lane" && active.data.type === "item") {
         // Adding item to lane
-        const destination = overData as DraggableItemContext<Lane>;
-        const [sourceListIndex, sourceIndex] = activeData.indexPath;
+        const destination = over as DragContext<Lane>;
+        const [sourceListIndex, sourceIndex] = active.indexPath;
         const [destinationListIndex] = destination.indexPath;
 
         // Same list
@@ -300,21 +322,21 @@ export function useDragHandlers({
         return setLanes((lanes) => {
           return update(lanes, {
             [sourceListIndex]: {
-              items: {
+              children: {
                 $splice: [[sourceIndex, 1]],
               },
             },
             [destinationListIndex]: {
-              items: {
-                $unshift: [lanes[sourceListIndex].items[sourceIndex]],
+              children: {
+                $unshift: [lanes[sourceListIndex].children[sourceIndex]],
               },
             },
           });
         });
-      } else if (overData?.type === "item" && activeData?.type === "item") {
+      } else if (over.data.type === "item" && active.data.type === "item") {
         // Sorting items
-        const itemData = overData as DraggableItemContext<Item>;
-        const [sourceListIndex, sourceItemIndex] = activeData.indexPath;
+        const itemData = over as DragContext<Item>;
+        const [sourceListIndex, sourceItemIndex] = active.indexPath;
         const [destinationListIndex, destinationItemIndex] = itemData.indexPath;
 
         if (
@@ -324,9 +346,9 @@ export function useDragHandlers({
           setLanes((lanes) => {
             return update(lanes, {
               [destinationListIndex]: {
-                items: {
+                children: {
                   $set: arrayMove(
-                    lanes[destinationListIndex].items,
+                    lanes[destinationListIndex].children,
                     sourceItemIndex,
                     destinationItemIndex
                   ),
@@ -345,6 +367,8 @@ export function useDragHandlers({
       activeItem,
       activeLane,
       clonedLanes,
+
+      // These don't change, but tslint complains
       setLanes,
       setActiveLane,
       setActiveItem,
@@ -362,7 +386,7 @@ export function useDragHandlers({
 
 export function useCustomCollisionDetection(
   lanes: Lane[],
-  activeLane: DraggableItemContext<Lane> | null
+  activeLane: DragContext<Lane> | null
 ) {
   const laneIds = React.useMemo(
     () =>

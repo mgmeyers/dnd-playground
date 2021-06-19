@@ -3,28 +3,29 @@ export enum SortableDirection {
   Horizontal,
 }
 
-export interface DraggableItemContext<T> {
+export interface NestableProps {
+  id: string;
   type: string;
-  containingListId: string;
+}
+
+export interface Nestable<D, T = never> extends NestableProps {
+  children: T[];
+  data: D;
+}
+
+export interface ItemData {
+  title: string;
+}
+
+export interface LaneData {
+  title: string;
+}
+
+export type Item = Nestable<ItemData>
+export type Lane = Nestable<LaneData, Item>
+
+export interface DragContext<T> {
+  parentId: string | null;
   indexPath: number[];
   data: T;
-}
-
-export interface DraggableListContext {
-  indexPath: number[];
-}
-
-export interface WithId {
-  id: string;
-}
-
-export interface Item {
-  id: string;
-  title: string;
-}
-
-export interface Lane {
-  id: string;
-  title: string;
-  items: Item[];
 }
