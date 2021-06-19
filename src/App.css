@@ -29,7 +29,7 @@
 }
 
 .lane.is-dragging {
-  visibility: hidden;
+  opacity: 0.6;
 }
 
 .item {
@@ -40,5 +40,13 @@
 }
 
 .item.is-dragging {
-  visibility: hidden;
+  opacity: 0.6;
+}
+
+.lane-items {
+  padding: 5px;
+}
+
+.is-active-dropzone {
+  background-color: lightgreen;
 }

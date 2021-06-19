@@ -1,6 +1,9 @@
+import update from "immutability-helper";
 import {
   DndContext,
+  DragEndEvent,
   DragOverlay,
+  DragStartEvent,
   PointerSensor,
   useSensor,
   useSensors,
@@ -10,91 +13,12 @@ import React from "react";
 import "./App.css";
 import {
   SortableList,
-  SortableDirection,
   SortableItem,
   SortableItemOverlay,
-  DraggableItemContext,
-  SortableListOverlay,
-} from "./SortableList";
-
-interface Item {
-  id: string;
-  title: string;
-}
-
-interface ItemContentProps {
-  item: Item;
-}
-
-function ItemContent({ item }: ItemContentProps) {
-  return <div>{item.title}</div>;
-}
-
-interface Lane {
-  id: string;
-  title: string;
-  items: Item[];
-}
-
-interface LaneContentProps {
-  lane: Lane;
-  indexPath?: number[];
-}
-
-function LaneContent({ lane, indexPath }: LaneContentProps) {
-  return (
-    <div>
-      <div className="lane-title">{lane.title}</div>
-      {indexPath ? (
-        <SortableList
-          list={lane.items}
-          id={lane.id}
-          accepts="item"
-          direction={SortableDirection.Vertical}
-        >
-          {lane.items.map((item, i) => (
-            <SortableItem
-              className="item"
-              data={{
-                type: "item",
-                containingListId: lane.id,
-                indexPath: [...indexPath, i],
-                data: item,
-              }}
-              key={item.id}
-              id={item.id}
-            >
-              <ItemContent item={item} />
-            </SortableItem>
-          ))}
-        </SortableList>
-      ) : (
-        <SortableListOverlay
-          list={lane.items}
-          id={lane.id}
-          accepts="item"
-          direction={SortableDirection.Vertical}
-        >
-          {lane.items.map((item, i) => (
-            <SortableItemOverlay
-              className="item"
-              data={{
-                type: "item",
-                containingListId: lane.id,
-                indexPath: [i],
-                data: item,
-              }}
-              key={item.id}
-              id={item.id}
-            >
-              <ItemContent item={item} />
-            </SortableItemOverlay>
-          ))}
-        </SortableListOverlay>
-      )}
-    </div>
-  );
-}
+} from "./components/SortableList";
+import { DraggableItemContext, Item, Lane, SortableDirection } from "./components/types";
+import { dragToEmptyLane, dragToPopulatedLane } from "./components/helpers";
+import { ItemContent, LaneContent } from "./components/Presentation";
 
 function App() {
   const [lanes, setLanes] = React.useState<Lane[]>([
@@ -112,12 +36,17 @@ function App() {
       title: "two",
       items: [
         { id: "1.2", title: "one.b" },
-        { id: "2.2", title: "two.b" },
+        {
+          id: "2.2",
+          title:
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur efficitur purus in commodo tristique. Sed ante sem, consequat quis arcu vitae, pretium dapibus augue.",
+        },
         { id: "3.2", title: "three.b" },
       ],
     },
     { id: "3", title: "three", items: [] },
   ]);
+  const [clonedLanes, setClonedLanes] = React.useState<Lane[] | null>(null);
 
   const [activeLane, setActiveLane] =
     React.useState<DraggableItemContext<Lane> | null>(null);
@@ -136,17 +65,17 @@ function App() {
     activeDrag = (
       <SortableItemOverlay
         id={activeLane.data.id}
-        data={activeLane}
+        ctx={activeLane}
         className="lane"
       >
-        <LaneContent lane={activeLane.data} />
+        <LaneContent lane={activeLane.data} isOverlay={true} />
       </SortableItemOverlay>
     );
   } else if (activeItem) {
     activeDrag = (
       <SortableItemOverlay
         id={activeItem.data.id}
-        data={activeItem}
+        ctx={activeItem}
         className="item"
       >
         <ItemContent item={activeItem.data} />
@@ -154,63 +83,178 @@ function App() {
     );
   }
 
+  const onDragStart = React.useCallback(
+    (e: DragStartEvent) => {
+      const activeData = e.active.data.current;
+
+      if (activeData?.type === "lane") {
+        const laneData = activeData as DraggableItemContext<Lane>;
+        setActiveLane(laneData);
+      } else if (activeData?.type === "item") {
+        const itemData = activeData as DraggableItemContext<Lane>;
+        setActiveItem(itemData);
+        setClonedLanes(lanes);
+      }
+    },
+    [lanes]
+  );
+
+  const onDragCancel = React.useCallback(() => {
+    if (activeLane) setActiveLane(null);
+    if (activeItem) setActiveItem(null);
+    if (clonedLanes) {
+      setLanes(clonedLanes);
+      setClonedLanes(null);
+    }
+  }, [clonedLanes, activeLane, activeItem]);
+
+  const onDragOver = React.useCallback(
+    ({ active, over }: DragEndEvent) => {
+      const activeData = active.data.current;
+      const overData = over?.data.current;
+
+      if (activeData?.type !== "item") {
+        return;
+      }
+
+      if (!over) {
+        if (clonedLanes) {
+          setLanes(clonedLanes);
+        }
+
+        return;
+      }
+
+      const source = activeData as DraggableItemContext<Item>;
+
+      if (overData?.type === "lane") {
+        const destination = overData as DraggableItemContext<Lane>;
+        const mutation = dragToEmptyLane(source, destination);
+
+        if (mutation) {
+          return setLanes(mutation);
+        }
+      }
+
+      const destination = overData as DraggableItemContext<Item>;
+      const mutation = dragToPopulatedLane(
+        lanes,
+        source,
+        destination,
+        active,
+        over
+      );
+
+      if (mutation) {
+        return setLanes(mutation);
+      }
+    },
+    [lanes, clonedLanes]
+  );
+
+  const onDragEnd = React.useCallback(
+    ({ active, over }: DragEndEvent) => {
+      const activeData = active?.data.current;
+      const overData = over?.data.current;
+
+      if (!over) {
+        if (clonedLanes) {
+          setLanes(clonedLanes);
+          setClonedLanes(null);
+        }
+        return;
+      }
+
+      if (overData?.type === "lane" && activeData?.type === "lane") {
+        // Sorting lanes
+        const destination = overData as DraggableItemContext<Lane>;
+        const [sourceListIndex] = activeData.indexPath;
+        const [destinationListIndex] = destination.indexPath;
+
+        if (sourceListIndex !== destinationListIndex) {
+          setLanes((lanes) =>
+            arrayMove(lanes, sourceListIndex, destinationListIndex)
+          );
+        }
+      } else if (overData?.type === "lane" && activeData?.type === "item") {
+        // Adding item to lane
+        const destination = overData as DraggableItemContext<Lane>;
+        const [sourceListIndex, sourceIndex] = activeData.indexPath;
+        const [destinationListIndex] = destination.indexPath;
+
+        // Same list
+        if (sourceListIndex === destinationListIndex) {
+          return;
+        }
+
+        return setLanes((lanes) => {
+          return update(lanes, {
+            [sourceListIndex]: {
+              items: {
+                $splice: [[sourceIndex, 1]],
+              },
+            },
+            [destinationListIndex]: {
+              items: {
+                $unshift: [lanes[sourceListIndex].items[sourceIndex]],
+              },
+            },
+          });
+        });
+      } else if (overData?.type === "item" && activeData?.type === "item") {
+        // Sorting items
+        const itemData = overData as DraggableItemContext<Item>;
+        const [sourceListIndex, sourceItemIndex] = activeData.indexPath;
+        const [destinationListIndex, destinationItemIndex] = itemData.indexPath;
+
+        if (
+          sourceListIndex === destinationListIndex &&
+          sourceItemIndex !== destinationItemIndex
+        ) {
+          setLanes((lanes) => {
+            return update(lanes, {
+              [destinationListIndex]: {
+                items: {
+                  $set: arrayMove(
+                    lanes[destinationListIndex].items,
+                    sourceItemIndex,
+                    destinationItemIndex
+                  ),
+                },
+              },
+            });
+          });
+        }
+      }
+
+      if (activeLane) setActiveLane(null);
+      if (activeItem) setActiveItem(null);
+      if (clonedLanes) setClonedLanes(null);
+    },
+    [activeItem, activeLane, clonedLanes]
+  );
+
   return (
     <div className="App">
       <DndContext
-        onDragStart={(e) => {
-          const activeData = e.active.data.current;
-
-          if (activeData?.type === "lane") {
-            const laneData = activeData as DraggableItemContext<Lane>;
-            setActiveLane(laneData);
-          } else if (activeData?.type === "item") {
-            const itemData = activeData as DraggableItemContext<Lane>;
-            setActiveItem(itemData);
-          }
-        }}
-        onDragCancel={(e) => {
-          if (activeLane) setActiveLane(null);
-          if (activeItem) setActiveItem(null);
-        }}
-        onDragEnd={(e) => {
-          const overData = e.over?.data.current;
-
-          if (overData?.type === "lane") {
-            const laneData = overData as DraggableItemContext<Lane>;
-
-            if (
-              activeLane &&
-              activeLane.indexPath[0] !== laneData.indexPath[0]
-            ) {
-              setLanes((lanes) =>
-                arrayMove(lanes, activeLane.indexPath[0], laneData.indexPath[0])
-              );
-            }
-          } else if (overData?.type === "item") {
-            // const itemData = activeData as DraggableItemContext<Lane>;
-            // setActiveItem(itemData);
-          }
-
-          if (e.over) {
-          }
-
-          if (activeLane) setActiveLane(null);
-          if (activeItem) setActiveItem(null);
-        }}
+        onDragStart={onDragStart}
+        onDragCancel={onDragCancel}
+        onDragOver={onDragOver}
+        onDragEnd={onDragEnd}
         sensors={sensors}
       >
         <SortableList
           list={lanes}
-          id="row-1"
+          id="base"
           accepts="lane"
           direction={SortableDirection.Horizontal}
         >
           {lanes.map((lane, i) => (
             <SortableItem
               className="lane"
-              data={{
+              ctx={{
                 type: "lane",
-                containingListId: "row-1",
+                containingListId: "base",
                 indexPath: [i],
                 data: lane,
               }}
