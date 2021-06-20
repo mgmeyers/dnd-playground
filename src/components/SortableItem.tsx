@@ -40,22 +40,43 @@ export const SortableItem = React.memo(function SortableItem<
     setNodeRef,
     transform,
     transition,
+    rect,
   } = useSortable({
     id: ctx.data.id,
     data: ctx,
   });
 
-  const isTypeSorting = active?.data.current?.data.type === ctx.data.type;
-  const style = React.useMemo(
-    () =>
-      isTypeSorting
-        ? {
-            transform: CSS.Translate.toString(transform),
-            transition: transition || undefined,
-          }
-        : undefined,
-    [isTypeSorting, transform, transition]
-  );
+  const dragRect = rect.current;
+  const isTypeSorting =
+    transform && active?.data.current?.data.type === ctx.data.type;
+  const shouldDisplayDragPlaceholder = isDragging && dragRect;
+
+  const style = React.useMemo(() => {
+    let styles: React.CSSProperties | undefined = undefined;
+
+    if (isTypeSorting) {
+      styles = {
+        transform: CSS.Translate.toString(transform),
+        transition: transition || undefined,
+      };
+    }
+
+    if (shouldDisplayDragPlaceholder) {
+      styles = {
+        ...(styles || {}),
+        width: dragRect?.width,
+        height: dragRect?.height,
+      };
+    }
+
+    return styles;
+  }, [
+    isTypeSorting,
+    transform,
+    transition,
+    shouldDisplayDragPlaceholder,
+    dragRect,
+  ]);
 
   return (
     <div
@@ -65,7 +86,7 @@ export const SortableItem = React.memo(function SortableItem<
       {...listeners}
       {...attributes}
     >
-      {children}
+      {shouldDisplayDragPlaceholder ? null : children}
     </div>
   );
 },

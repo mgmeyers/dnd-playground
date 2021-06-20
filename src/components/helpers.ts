@@ -8,15 +8,12 @@ import {
 } from "@dnd-kit/core";
 import {
   arrayMove,
-  horizontalListSortingStrategy,
-  verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import {
   DragContext,
   Item,
   Lane,
   NestableProps,
-  SortableDirection,
 } from "./types";
 
 export type MapAny = { [k: string]: any };
@@ -100,15 +97,6 @@ export function areEqualWithCtx(objA: MapAny, objB: MapAny) {
 
     return false;
   });
-}
-
-export function getStrategy(direction: SortableDirection) {
-  switch (direction) {
-    case SortableDirection.Horizontal:
-      return horizontalListSortingStrategy;
-    case SortableDirection.Vertical:
-      return verticalListSortingStrategy;
-  }
 }
 
 export function dragToEmptyLane(

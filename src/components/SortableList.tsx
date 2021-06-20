@@ -1,4 +1,4 @@
-import { SortableContext } from "@dnd-kit/sortable";
+import { horizontalListSortingStrategy, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import React from "react";
 import { useDroppable } from "@dnd-kit/core";
 import classcat from "classcat";
@@ -8,7 +8,16 @@ import {
   SortableDirection,
   NestableProps,
 } from "./types";
-import { areEqualWithCtx, getStrategy } from "./helpers";
+import { areEqualWithCtx } from "./helpers";
+
+function getStrategy(direction: SortableDirection) {
+  switch (direction) {
+    case SortableDirection.Horizontal:
+      return horizontalListSortingStrategy;
+    case SortableDirection.Vertical:
+      return verticalListSortingStrategy;
+  }
+}
 
 function useListClasses({
   direction,

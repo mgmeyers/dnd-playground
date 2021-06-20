@@ -36,20 +36,6 @@ body {
   overflow-y: hidden;
 }
 
-.sortable-list-horizontal {
-  display: grid;
-  grid-auto-flow: column;
-  grid-gap: 10px;
-  justify-content: start;
-  align-items: start;
-}
-
-.sortable-list-vertical {
-  display: grid;
-  grid-auto-flow: row;
-  grid-gap: 10px;
-}
-
 .lane {
   background-color: thistle;
   border: 2px solid #ddd;
@@ -73,21 +59,6 @@ body {
   flex-shrink: 0;
 }
 
-.lane.is-dragging {
-  opacity: 0.6;
-}
-
-.item {
-  background-color: cornflowerblue;
-  border: 2px solid #fff;
-  padding: 10px;
-  border-radius: 6px;
-}
-
-.item.is-dragging {
-  opacity: 0.6;
-}
-
 .lane-items {
   padding: 5px;
   min-height: 0;
@@ -100,10 +71,38 @@ body {
   overflow-x: hidden;
 }
 
-.is-active-dropzone {
-  background-color: lightgreen;
+.item {
+  background-color: cornflowerblue;
+  border: 2px solid #fff;
+  padding: 10px;
+  border-radius: 6px;
+}
+
+/*  */
+
+.sortable-list-horizontal {
+  display: grid;
+  grid-auto-flow: column;
+  grid-gap: 10px;
+  justify-content: start;
+  align-items: start;
+}
+
+.sortable-list-vertical {
+  display: grid;
+  grid-auto-flow: row;
+  grid-gap: 10px;
 }
 
 .draggable-item {
   touch-action: none;
+  transition: transform 200ms ease 0s;
+}
+
+.is-active-dropzone {
+  background-color: lightgreen;
+}
+
+.is-dragging {
+  visibility: hidden;
 }
