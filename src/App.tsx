@@ -2,16 +2,17 @@ import { DndContext, DragOverlay } from "@dnd-kit/core";
 import React from "react";
 import { LoremIpsum } from "lorem-ipsum";
 import "./App.css";
-import { SortableItemOverlay } from "./components/SortableItem";
-import { DragContext, Item, Lane, SortableDirection } from "./components/types";
-import { LaneContent, SortableLane } from "./components/Lane";
-import {
-  useCustomCollisionDetection,
-  useDragHandlers,
-} from "./components/helpers";
-import { createPortal } from "react-dom";
-import { SortableList } from "./components/SortableList";
+import { Item, Lane } from "./components/types";
+import { DraggableLane } from "./components/Lane";
 import { CardContent } from "./components/Card";
+import {
+  DragDroppable,
+  DragDroppableContext,
+  DragDroppableList,
+  DragDroppableOverlay,
+} from "./alt/DragDroppable";
+import { Dimensions, OverlayDimensionsContext } from "./alt/Context";
+import { createPortal } from "react-dom";
 
 function generateInstanceId(): string {
   return Math.random().toString(36).substr(2, 9);
@@ -55,108 +56,92 @@ function generateLanes(n: number) {
 
 const TEST_BOARD = generateLanes(8);
 
-function useBoardData() {
-  const laneState = React.useState<Lane[]>(TEST_BOARD);
-  const clonedLaneState = React.useState<Lane[] | null>(null);
-
-  const activeLaneState = React.useState<DragContext<Lane> | null>(null);
-  const activeItemState = React.useState<DragContext<Item> | null>(null);
-
-  return {
-    laneState,
-    clonedLaneState,
-    activeLaneState,
-    activeItemState,
-  };
-}
-
-const rootContext = {
-  parentId: null,
-  indexPath: [],
-  data: {},
-};
-
 function App() {
-  const { laneState, clonedLaneState, activeLaneState, activeItemState } =
-    useBoardData();
+  const [lanes, setLanes] = React.useState<Lane[]>(TEST_BOARD);
 
-  const { onDragStart, onDragCancel, onDragOver, onDragEnd } = useDragHandlers({
-    laneState,
-    clonedLaneState,
-    activeLaneState,
-    activeItemState,
-  });
+  const [activeDrag, setActiveDrag] =
+    React.useState<DragDroppableContext | null>(null);
+  const activeDimensions = React.useRef<Dimensions | undefined>(undefined);
 
-  const lanes = laneState[0];
-  const activeLane = activeLaneState[0];
-  const activeItem = activeItemState[0];
+  let overlay = null;
 
-  const collisionDetection = useCustomCollisionDetection(
-    laneState[0],
-    activeLane
-  );
-
-  let activeDrag = null;
-
-  if (activeLane) {
-    activeDrag = (
-      <SortableItemOverlay ctx={activeLane} className="lane">
-        <LaneContent
-          parentId={activeLane.parentId as string}
-          lane={activeLane.data}
-          indexPath={activeLane.indexPath}
-          isOverlay={true}
+  if (activeDrag?.type === "lane") {
+    const lane = lanes[activeDrag.indexPath[0]];
+    overlay = (
+      <DragDroppableOverlay orientation="horizontal" className="lane">
+        <DraggableLane
+          isOverlay
+          lane={lane}
+          laneIndex={activeDrag.indexPath[0]}
         />
-      </SortableItemOverlay>
+      </DragDroppableOverlay>
     );
-  } else if (activeItem) {
-    activeDrag = (
-      <SortableItemOverlay ctx={activeItem} className="item">
-        <CardContent item={activeItem.data} />
-      </SortableItemOverlay>
+  } else if (activeDrag?.type === "item") {
+    const item =
+      lanes[activeDrag.indexPath[0]].children[activeDrag.indexPath[1]];
+    overlay = (
+      <DragDroppableOverlay orientation="vertical" className="item">
+        <CardContent item={item} />
+      </DragDroppableOverlay>
     );
   }
 
-  const rootContent = React.useMemo(() => {
-    return {
-      id: "root",
-      type: "root",
-      children: lanes,
-      data: {},
-    };
-  }, [lanes]);
-
   return (
-    <>
+    <OverlayDimensionsContext.Provider value={activeDimensions}>
       <div className="app-header">Lorem Ipsum</div>
       <div className="app">
         <DndContext
-          onDragStart={onDragStart}
-          onDragCancel={onDragCancel}
-          onDragOver={onDragOver}
-          onDragEnd={onDragEnd}
-          collisionDetection={collisionDetection}
+          onDragStart={(e) => {
+            if (!e.active.data.current) {
+              return;
+            }
+
+            console.log(e);
+
+            activeDimensions.current = {
+              width: e.active.rect.current.initial?.width || 0,
+              height: e.active.rect.current.initial?.height || 0,
+            };
+
+            const active = e.active.data.current as DragDroppableContext;
+
+            setActiveDrag(active);
+          }}
+          onDragCancel={() => {
+            if (activeDrag) {
+              setActiveDrag(null);
+            }
+          }}
+          onDragOver={(e) => {
+            activeDimensions.current = {
+              width: e.active.rect.current.initial?.width || 0,
+              height: e.active.rect.current.initial?.height || 0,
+            };
+          }}
+          onDragEnd={() => {
+            if (activeDrag) {
+              setActiveDrag(null);
+            }
+          }}
         >
-          <SortableList
-            className="board"
-            accepts="lane"
-            direction={SortableDirection.Horizontal}
-            content={rootContent}
-            ctx={rootContext}
-          >
+          <DragDroppableList className="board" orientation="horizontal">
             {lanes.map((lane, i) => (
-              <SortableLane
+              <DragDroppable
+                className="lane"
+                id={lane.id}
+                indexPath={[i]}
                 key={lane.id}
-                parentId="root"
-                lane={lane}
-                laneIndex={i}
-              />
+                orientation="horizontal"
+                type="lane"
+              >
+                <DraggableLane key={lane.id} lane={lane} laneIndex={i} />
+              </DragDroppable>
             ))}
-          </SortableList>
-          {createPortal(<DragOverlay>{activeDrag}</DragOverlay>, document.body)}
+          </DragDroppableList>
+          {createPortal(<DragOverlay>{overlay}</DragOverlay>, document.body)}
         </DndContext>
       </div>
-    </>
+    </OverlayDimensionsContext.Provider>
   );
 }
 

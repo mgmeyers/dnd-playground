@@ -3,8 +3,56 @@ import { SortableItem } from "./SortableItem";
 import { Lane, SortableDirection } from "./types";
 import { areEqualWithIndexPath } from "./helpers";
 import { SortableDroppableList, SortableListOverlay } from "./SortableList";
-import { SortableCard } from "./Card";
+import { CardContent, SortableCard } from "./Card";
+import {
+  DragDroppable,
+  DragDroppableList,
+  DragDroppableOverlay,
+} from "../alt/DragDroppable";
 
+interface LaneContentProps {
+  lane: Lane;
+  laneIndex: number;
+  isOverlay?: boolean;
+}
+
+export function DraggableLane({
+  lane,
+  laneIndex,
+  isOverlay,
+}: LaneContentProps) {
+  return (
+    <>
+      <div className="lane-title">{lane.data.title}</div>
+      <DragDroppableList className="lane-items" orientation="vertical">
+        {lane.children.map((item, i) =>
+          isOverlay ? (
+            <DragDroppableOverlay
+              className="item"
+              key={item.id}
+              orientation="vertical"
+            >
+              <CardContent key={lane.id} item={item} />
+            </DragDroppableOverlay>
+          ) : (
+            <DragDroppable
+              className="item"
+              id={item.id}
+              indexPath={[laneIndex, i]}
+              key={item.id}
+              orientation="vertical"
+              type="item"
+            >
+              <CardContent key={lane.id} item={item} />
+            </DragDroppable>
+          )
+        )}
+      </DragDroppableList>
+    </>
+  );
+}
+
+/*
 interface LaneContentProps {
   lane: Lane;
   parentId: string;
@@ -73,3 +121,4 @@ export const SortableLane = React.memo(function SortableLane({
     </SortableItem>
   );
 });
+*/

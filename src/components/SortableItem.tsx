@@ -47,8 +47,7 @@ export const SortableItem = React.memo(function SortableItem<
   });
 
   const dragRect = rect.current;
-  const isTypeSorting =
-    transform && active?.data.current?.data.type === ctx.data.type;
+  const isTypeSorting = active?.data.current?.data.type === ctx.data.type;
   const shouldDisplayDragPlaceholder = isDragging && dragRect;
 
   const style = React.useMemo(() => {

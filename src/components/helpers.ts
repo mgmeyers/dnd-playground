@@ -85,7 +85,7 @@ export function areEqualWithIndexPath(objA: MapAny, objB: MapAny) {
       return areArraysEqual(a, b);
     }
 
-    return false;
+    return is(a, b);
   });
 }
 
@@ -95,7 +95,7 @@ export function areEqualWithCtx(objA: MapAny, objB: MapAny) {
       return areEqualWithIndexPath(a, b);
     }
 
-    return false;
+    return is(a, b);
   });
 }
 
