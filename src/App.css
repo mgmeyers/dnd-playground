@@ -123,6 +123,12 @@ body {
 .drop-placeholder {
   flex-grow: 0;
   flex-shrink: 0;
-  width: 0;
+}
+
+.drop-placeholder.is-vertical {
   height: 0;
+}
+
+.drop-placeholder.is-horizontal {
+  width: 0;
 }

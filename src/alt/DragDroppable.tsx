@@ -5,14 +5,10 @@ import {
   useDraggable,
   useDroppable,
 } from "@dnd-kit/core";
+import { motion, TargetAndTransition, Variants } from "framer-motion";
+import { usePrevious } from "react-use";
 import { areEqualWithPath } from "../components/helpers";
 import { OverlayDimensionsContext } from "./Context";
-import {
-  AnimatePresence,
-  motion,
-  TargetAndTransition,
-  useIsPresent,
-} from "framer-motion";
 import { isNextSibling } from "./helpers";
 import { DragContext } from "./types";
 
@@ -68,9 +64,7 @@ export const Sortable = React.memo(function Sortable({
   children,
   isOverlay,
 }: DragDropableProps & DragContext & SwitchProps) {
-  const isPresent = useIsPresent();
-
-  if (!isPresent || isOverlay) {
+  if (isOverlay) {
     return (
       <DraggableOverlay className={className} orientation={orientation}>
         {children}
@@ -89,7 +83,8 @@ export const Sortable = React.memo(function Sortable({
       {children}
     </DragDroppable>
   );
-});
+},
+areEqualWithPath);
 
 export const DragDroppable = React.memo(function DragDroppable({
   className,
@@ -108,14 +103,19 @@ export const DragDroppable = React.memo(function DragDroppable({
     },
   };
 
-  const { isOver, active, setNodeRef: setDroppable } = useDroppable(params);
-
   const {
     isDragging,
     setNodeRef: setDraggable,
     listeners,
     attributes,
   } = useDraggable(params);
+
+  const { isOver, active, setNodeRef: setDroppable } = useDroppable(params);
+
+  const prevIsOver = usePrevious(isOver);
+  const prevActive = usePrevious(active);
+
+  const didReceiveDrop = !!prevIsOver && !isOver && !!prevActive && !active;
 
   const setRef = React.useCallback(
     (el: HTMLElement | null) => {
@@ -142,6 +142,7 @@ export const DragDroppable = React.memo(function DragDroppable({
         className
       )}
       isActive={isActive}
+      didReceiveDrop={didReceiveDrop}
       listeners={listeners}
       orientation={orientation}
       setRef={setRef}
@@ -169,7 +170,7 @@ export const DraggableOverlay = React.memo(function DraggableOverlay({
         className
       )}
       orientation={orientation}
-      isOverlay={true}
+      isOverlay
     >
       {children}
     </DragDroppableInterior>
@@ -178,58 +179,76 @@ export const DraggableOverlay = React.memo(function DraggableOverlay({
 
 interface DragDroppableInteriorProps {
   attributes?: { [k: string]: number | string | boolean | undefined };
+  children: React.ReactNode;
   className: string;
-  style?: React.CSSProperties;
+  didReceiveDrop?: boolean;
   isActive?: boolean;
   isOverlay?: boolean;
   listeners?: DraggableSyntheticListeners;
   orientation: Orientation;
   setRef?: (el: HTMLElement | null) => void;
-  children: React.ReactNode;
+  style?: React.CSSProperties;
 }
 
 export const DragDroppableInterior = React.memo(function DragDroppableInterior({
   attributes,
-  className,
-  style,
   children,
+  className,
+  didReceiveDrop,
   isActive,
   isOverlay,
   listeners,
   orientation,
   setRef,
+  style,
 }: DragDroppableInteriorProps) {
-  const ref = React.useRef<HTMLDivElement | null>(null);
+  const dimensionsRef = React.useContext(OverlayDimensionsContext);
 
+  const staticDimension = orientation === "vertical" ? "width" : "height";
   const exitDimension = orientation === "vertical" ? "height" : "width";
   const exit = React.useMemo<TargetAndTransition>(
     () => ({ [exitDimension]: 0, visibility: "hidden" }),
     [exitDimension]
   );
 
-  return (
-    <motion.div
-      style={style}
-      exit={exit}
-      transition={transition}
-      className={classcat([
+  const combinedStyles = React.useMemo(() => {
+    if (isOverlay && dimensionsRef.current) {
+      return {
+        ...style,
+        [staticDimension]: dimensionsRef.current[staticDimension],
+      };
+    }
+
+    return style;
+  }, [style, isOverlay, staticDimension, dimensionsRef]);
+
+  const wrapperClassName = React.useMemo(
+    () =>
+      classcat([
         "draggable-item",
         {
           "is-overlay": isOverlay,
         },
-      ])}
-      ref={(c) => {
-        if (setRef) {
-          setRef(c);
-        }
+      ]),
+    [isOverlay]
+  );
 
-        ref.current = c;
-      }}
+  return (
+    <motion.div
+      style={combinedStyles}
+      exit={exit}
+      transition={transition}
+      className={wrapperClassName}
+      ref={setRef}
       {...listeners}
       {...attributes}
     >
       {!!listeners && (
-        <Placeholder orientation={orientation} isOver={!!isActive} />
+        <Placeholder
+          orientation={orientation}
+          isOver={!!isActive}
+          shouldSuppressAnimation={!!didReceiveDrop}
+        />
       )}
       <div className={className}>{children}</div>
     </motion.div>
@@ -237,52 +256,64 @@ export const DragDroppableInterior = React.memo(function DragDroppableInterior({
 });
 
 const Placeholder = React.memo(
-  ({ orientation, isOver }: { orientation: Orientation; isOver: boolean }) => {
+  ({
+    orientation,
+    isOver,
+    shouldSuppressAnimation,
+  }: {
+    orientation: Orientation;
+    isOver: boolean;
+    shouldSuppressAnimation: boolean;
+  }) => {
     const dimensionsRef = React.useContext(OverlayDimensionsContext);
 
-    const { style, animate, className } = React.useMemo(() => {
-      const animationDimension =
-        orientation === "vertical" ? "height" : "width";
-      const staticDimension = orientation === "vertical" ? "width" : "height";
+    const animationDimension = orientation === "vertical" ? "height" : "width";
+    const size = dimensionsRef.current
+      ? dimensionsRef.current[animationDimension]
+      : 0;
 
-      let style = {
-        [staticDimension]: 0,
-      };
+    const variants: Variants = React.useMemo(
+      () => ({
+        open: {
+          [animationDimension]: size,
+          transition,
+        },
+        openImmediately: {
+          [animationDimension]: size,
+          transition: noTransition,
+        },
+        close: {
+          [animationDimension]: 0,
+          transition,
+        },
+        closeImmediately: {
+          [animationDimension]: 0,
+          transition: noTransition,
+        },
+      }),
+      [animationDimension, size]
+    );
 
-      let animate = {
-        [animationDimension]: 0,
-      };
+    let animate = shouldSuppressAnimation ? "closeImmediately" : "close";
 
-      if (isOver && dimensionsRef.current) {
-        style = {
-          [staticDimension]: dimensionsRef.current[staticDimension],
-        };
+    if (isOver) {
+      animate = shouldSuppressAnimation ? "openImmediately" : "open";
+    }
 
-        animate = {
-          [animationDimension]: dimensionsRef.current[animationDimension],
-        };
-      }
-
-      return {
-        style,
-        animate,
-        className: classcat([
+    return (
+      <motion.div
+        initial="closeImmediately"
+        animate={animate}
+        variants={variants}
+        transition={transition}
+        className={classcat([
           "drop-placeholder",
           {
             "is-over": isOver,
             "is-horizontal": orientation === "horizontal",
             "is-vertical": orientation === "vertical",
           },
-        ]),
-      };
-    }, [orientation, isOver, dimensionsRef]);
-
-    return (
-      <motion.div
-        style={style}
-        animate={animate}
-        transition={transition}
-        className={className}
+        ])}
       />
     );
   }
@@ -301,7 +332,7 @@ export function SortableList({
           "sortable-list-vertical": orientation === "vertical",
         })}
       >
-        <AnimatePresence>{children}</AnimatePresence>
+        {children}
       </div>
     </div>
   );

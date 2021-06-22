@@ -1,6 +1,7 @@
 import { Active, Over } from "@dnd-kit/core";
 import update, { Spec } from "immutability-helper";
 import { Nestable, EntityPath, DragContext } from "./types";
+import merge from "deepmerge";
 
 export function isNextSibling(source: EntityPath, sib: EntityPath): boolean {
   if (source.length !== sib.length) {
@@ -61,7 +62,7 @@ export function getEntityFromPath(root: Nestable, path: EntityPath): Nestable {
   return root;
 }
 
-export function buildRemoveMutation(root: Nestable, path: EntityPath) {
+export function buildRemoveMutation(path: EntityPath) {
   let mutation: Spec<Nestable> = {
     children: {
       $splice: [[path[path.length - 1], 1]],
@@ -80,20 +81,29 @@ export function buildRemoveMutation(root: Nestable, path: EntityPath) {
 }
 
 export function buildInsertMutation(
-  root: Nestable,
-  path: EntityPath,
+  source: EntityPath | null,
+  destination: EntityPath,
   entity: Nestable
 ) {
+  const inSameList = source && areSiblings(source, destination);
+  const len = destination.length;
+
+  let destinationModifier = 1;
+
+  if (inSameList && source && source[len - 1] < destination[len - 1]) {
+    destinationModifier = 2;
+  }
+
   let mutation: Spec<Nestable> = {
     children: {
-      $splice: [[path[path.length - 1], 0, entity]],
+      $splice: [[destination[len - destinationModifier], 0, entity]],
     },
   };
 
-  for (let i = path.length - 2; i >= 0; i--) {
+  for (let i = destination.length - 2; i >= 0; i--) {
     mutation = {
       children: {
-        [path[i]]: mutation,
+        [destination[i]]: mutation,
       },
     };
   }
@@ -107,13 +117,14 @@ export function moveEntity(
   destination: EntityPath
 ) {
   const entity = getEntityFromPath(root, source);
-  const newRoot = update(root, buildRemoveMutation(root, source));
+  const removeMutation = buildRemoveMutation(source);
+  const insertMutation = buildInsertMutation(source, destination, entity);
 
-  return update(newRoot, buildInsertMutation(root, destination, entity));
+  return update(root, merge(removeMutation, insertMutation));
 }
 
 export function removeEntity(root: Nestable, target: EntityPath) {
-  return update(root, buildRemoveMutation(root, target));
+  return update(root, buildRemoveMutation(target));
 }
 
 export function insertEntity(
@@ -121,7 +132,7 @@ export function insertEntity(
   destination: EntityPath,
   entity: Nestable
 ) {
-  return update(root, buildInsertMutation(root, destination, entity));
+  return update(root, buildInsertMutation(null, destination, entity));
 }
 
 export function isRelevantDrag(active: Active, over: Over | null) {
