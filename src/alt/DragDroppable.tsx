@@ -5,60 +5,27 @@ import {
   useDraggable,
   useDroppable,
 } from "@dnd-kit/core";
-import { areEqualWithIndexPath } from "../components/helpers";
+import { areEqualWithPath } from "../components/helpers";
 import { OverlayDimensionsContext } from "./Context";
-import { motion } from "framer-motion";
+import {
+  AnimatePresence,
+  motion,
+  TargetAndTransition,
+  useIsPresent,
+} from "framer-motion";
+import { isNextSibling } from "./helpers";
+import { DragContext } from "./types";
 
-function isNextSibling(source: number[], sib: number[]): boolean {
-  if (source.length !== sib.length) {
-    return false;
-  }
+const transition = {
+  type: "tween",
+  duration: 0.2,
+  ease: [0.2, 0, 0, 1],
+};
 
-  return source.every((step, index) => {
-    if (index === source.length - 1) {
-      return step === sib[index] - 1;
-    }
-
-    return step === sib[index];
-  });
-}
-
-function areSiblings(source: number[], sib: number[]): boolean {
-  if (source.length !== sib.length) {
-    return false;
-  }
-
-  return source.every((step, index) => {
-    if (index === source.length - 1) {
-      return step !== sib[index];
-    }
-
-    return step === sib[index];
-  });
-}
-
-enum SiblingDirection {
-  Before,
-  After,
-  NotSiblings,
-}
-
-function getSiblingDirection(
-  source: number[],
-  sib: number[]
-): SiblingDirection {
-  if (!areSiblings(source, sib)) {
-    return SiblingDirection.NotSiblings;
-  }
-
-  const lastIndex = source.length - 1;
-
-  if (source[lastIndex] < sib[lastIndex]) {
-    return SiblingDirection.After;
-  }
-
-  return SiblingDirection.Before;
-}
+const noTransition = {
+  ...transition,
+  duration: 0,
+};
 
 function useDragDroppableClass(
   orientation: Orientation,
@@ -69,7 +36,6 @@ function useDragDroppableClass(
 ) {
   return classcat([
     className,
-    "draggable-item",
     {
       "is-horizontal": orientation === "horizontal",
       "is-vertical": orientation === "vertical",
@@ -80,34 +46,65 @@ function useDragDroppableClass(
   ]);
 }
 
-export interface DragDroppableContext {
-  indexPath: number[];
-  type: string;
-  id: string;
-}
-
 type Orientation = "horizontal" | "vertical";
 
 interface DragDropableProps {
   className?: string;
+  style?: React.CSSProperties;
   orientation: Orientation;
   children: React.ReactNode;
 }
+
+interface SwitchProps {
+  isOverlay?: boolean;
+}
+
+export const Sortable = React.memo(function Sortable({
+  className,
+  orientation,
+  id,
+  type,
+  path,
+  children,
+  isOverlay,
+}: DragDropableProps & DragContext & SwitchProps) {
+  const isPresent = useIsPresent();
+
+  if (!isPresent || isOverlay) {
+    return (
+      <DraggableOverlay className={className} orientation={orientation}>
+        {children}
+      </DraggableOverlay>
+    );
+  }
+
+  return (
+    <DragDroppable
+      className={className}
+      orientation={orientation}
+      path={path}
+      type={type}
+      id={id}
+    >
+      {children}
+    </DragDroppable>
+  );
+});
 
 export const DragDroppable = React.memo(function DragDroppable({
   className,
   orientation,
   id,
   type,
-  indexPath,
+  path,
   children,
-}: DragDropableProps & DragDroppableContext) {
+}: DragDropableProps & DragContext) {
   const params = {
     id,
     data: {
       id,
       type,
-      indexPath,
+      path,
     },
   };
 
@@ -128,13 +125,11 @@ export const DragDroppable = React.memo(function DragDroppable({
     [setDroppable, setDraggable]
   );
 
-  const sortDirection = getSiblingDirection(
-    active?.data.current?.indexPath || [],
-    indexPath
-  );
-
   const isActive =
-    isOver && active?.id !== id && active?.data.current?.type === type;
+    isOver &&
+    active?.id !== id &&
+    active?.data.current?.type === type &&
+    !isNextSibling(active.data.current.path, path);
 
   return (
     <DragDroppableInterior
@@ -150,21 +145,22 @@ export const DragDroppable = React.memo(function DragDroppable({
       listeners={listeners}
       orientation={orientation}
       setRef={setRef}
-      sortDirection={sortDirection}
     >
       {children}
     </DragDroppableInterior>
   );
 },
-areEqualWithIndexPath);
+areEqualWithPath);
 
-export const DragDroppableOverlay = React.memo(function DragDroppableOverlay({
+export const DraggableOverlay = React.memo(function DraggableOverlay({
   orientation,
   className,
   children,
+  style,
 }: React.PropsWithChildren<DragDropableProps>) {
   return (
     <DragDroppableInterior
+      style={style}
       className={useDragDroppableClass(
         orientation,
         false,
@@ -173,6 +169,7 @@ export const DragDroppableOverlay = React.memo(function DragDroppableOverlay({
         className
       )}
       orientation={orientation}
+      isOverlay={true}
     >
       {children}
     </DragDroppableInterior>
@@ -182,100 +179,116 @@ export const DragDroppableOverlay = React.memo(function DragDroppableOverlay({
 interface DragDroppableInteriorProps {
   attributes?: { [k: string]: number | string | boolean | undefined };
   className: string;
+  style?: React.CSSProperties;
   isActive?: boolean;
+  isOverlay?: boolean;
   listeners?: DraggableSyntheticListeners;
   orientation: Orientation;
   setRef?: (el: HTMLElement | null) => void;
   children: React.ReactNode;
-  sortDirection?: SiblingDirection;
 }
 
 export const DragDroppableInterior = React.memo(function DragDroppableInterior({
   attributes,
   className,
+  style,
   children,
   isActive,
+  isOverlay,
   listeners,
   orientation,
   setRef,
-  sortDirection,
 }: DragDroppableInteriorProps) {
+  const ref = React.useRef<HTMLDivElement | null>(null);
+
+  const exitDimension = orientation === "vertical" ? "height" : "width";
+  const exit = React.useMemo<TargetAndTransition>(
+    () => ({ [exitDimension]: 0, visibility: "hidden" }),
+    [exitDimension]
+  );
+
   return (
-    <div ref={setRef} {...listeners} {...attributes}>
+    <motion.div
+      style={style}
+      exit={exit}
+      transition={transition}
+      className={classcat([
+        "draggable-item",
+        {
+          "is-overlay": isOverlay,
+        },
+      ])}
+      ref={(c) => {
+        if (setRef) {
+          setRef(c);
+        }
+
+        ref.current = c;
+      }}
+      {...listeners}
+      {...attributes}
+    >
       {!!listeners && (
-        <Placeholder
-          orientation={orientation}
-          sortDirection={sortDirection}
-          isOver={!!isActive}
-        />
+        <Placeholder orientation={orientation} isOver={!!isActive} />
       )}
       <div className={className}>{children}</div>
-    </div>
+    </motion.div>
   );
 });
 
-const transition = {
-  delay: 0.15,
-  type: "tween",
-  duration: 0.2,
-};
-
 const Placeholder = React.memo(
-  ({
-    orientation,
-    isOver,
-    sortDirection,
-  }: {
-    orientation: Orientation;
-    isOver: boolean;
-    sortDirection?: SiblingDirection;
-  }) => {
+  ({ orientation, isOver }: { orientation: Orientation; isOver: boolean }) => {
     const dimensionsRef = React.useContext(OverlayDimensionsContext);
 
-    const animationDimension = orientation === "vertical" ? "height" : "width";
-    const staticDimension = orientation === "vertical" ? "width" : "height";
+    const { style, animate, className } = React.useMemo(() => {
+      const animationDimension =
+        orientation === "vertical" ? "height" : "width";
+      const staticDimension = orientation === "vertical" ? "width" : "height";
 
-    let style = {
-      [staticDimension]: 0,
-    };
-
-    let animate = {
-      [animationDimension]: 0,
-    };
-
-    if (isOver && dimensionsRef.current) {
-      style = {
-        [staticDimension]: dimensionsRef.current[staticDimension],
+      let style = {
+        [staticDimension]: 0,
       };
 
-      animate = {
-        [animationDimension]: dimensionsRef.current[animationDimension],
+      let animate = {
+        [animationDimension]: 0,
       };
-    }
+
+      if (isOver && dimensionsRef.current) {
+        style = {
+          [staticDimension]: dimensionsRef.current[staticDimension],
+        };
+
+        animate = {
+          [animationDimension]: dimensionsRef.current[animationDimension],
+        };
+      }
+
+      return {
+        style,
+        animate,
+        className: classcat([
+          "drop-placeholder",
+          {
+            "is-over": isOver,
+            "is-horizontal": orientation === "horizontal",
+            "is-vertical": orientation === "vertical",
+          },
+        ]),
+      };
+    }, [orientation, isOver, dimensionsRef]);
 
     return (
       <motion.div
         style={style}
         animate={animate}
         transition={transition}
-        className={classcat([
-          "drop-placeholder",
-          {
-            "is-before":
-              sortDirection === SiblingDirection.Before ||
-              sortDirection === SiblingDirection.NotSiblings,
-            "is-after": sortDirection === SiblingDirection.After,
-            "is-over": isOver,
-            "is-horizontal": orientation === "horizontal",
-            "is-vertical": orientation === "vertical",
-          },
-        ])}
+        className={className}
       />
     );
   }
 );
 
-export function DragDroppableList({
+export function SortableList({
   className,
   orientation,
   children,
@@ -288,7 +301,7 @@ export function DragDroppableList({
           "sortable-list-vertical": orientation === "vertical",
         })}
       >
-        {children}
+        <AnimatePresence>{children}</AnimatePresence>
       </div>
     </div>
   );

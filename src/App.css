@@ -35,6 +35,10 @@ body {
   width: 100%;
 }
 
+.lane-wrapper {
+  padding: 0 5px;
+}
+
 .lane {
   background-color: cornsilk;
   border: 2px solid #ddd;
@@ -60,6 +64,10 @@ body {
   display: flex;
 }
 
+.item-wrapper {
+  padding: 5px 0;
+}
+
 .item {
   background-color: deepskyblue;
   color: #fff;
@@ -74,8 +82,15 @@ body {
   touch-action: none;
 }
 
-.draggable-item.is-dragging {
-  opacity: 0.6;
+.drag-overlay > .draggable-item.is-overlay {
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+  display: flex;
+}
+
+.is-dragging {
+  opacity: 0.4;
 }
 
 .is-active-dropzone {
@@ -94,8 +109,6 @@ body {
 
 .sortable-list-horizontal > div {
   display: flex;
-  margin-left: 6px;
-  margin-right: 6px;
 }
 
 .sortable-list-vertical {
@@ -107,21 +120,9 @@ body {
   overflow-x: hidden;
 }
 
-.sortable-list-vertical > div {
-  margin-top: 6px;
-  margin-bottom: 6px;
-}
-
 .drop-placeholder {
+  flex-grow: 0;
+  flex-shrink: 0;
   width: 0;
   height: 0;
-  opacity: 0;
 }
-
-/* .drop-placeholder.is-over.is-vertical {
-  margin-bottom: 12px;
-}
-
-.drop-placeholder.is-over.is-horizontal {
-  margin-right: 12px;
-} */

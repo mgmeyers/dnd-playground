@@ -1,18 +1,17 @@
 import { DndContext, DragOverlay } from "@dnd-kit/core";
 import React from "react";
+import { createPortal } from "react-dom";
 import { LoremIpsum } from "lorem-ipsum";
 import "./App.css";
-import { Item, Lane } from "./components/types";
-import { DraggableLane } from "./components/Lane";
-import { CardContent } from "./components/Card";
+import { DragContext, Item, Lane, Nestable } from "./alt/types";
+import { DraggableLane } from "./alt/Lane";
+import { CardContent } from "./alt/Card";
+import { SortableList, DraggableOverlay, Sortable } from "./alt/DragDroppable";
 import {
-  DragDroppable,
-  DragDroppableContext,
-  DragDroppableList,
-  DragDroppableOverlay,
-} from "./alt/DragDroppable";
-import { Dimensions, OverlayDimensionsContext } from "./alt/Context";
-import { createPortal } from "react-dom";
+  Dimensions,
+  OverlayDimensionsContext,
+} from "./alt/Context";
+import { getBoardFromDrag, getEntityFromPath } from "./alt/helpers";
 
 function generateInstanceId(): string {
   return Math.random().toString(36).substr(2, 9);
@@ -57,90 +56,93 @@ function generateLanes(n: number) {
 const TEST_BOARD = generateLanes(8);
 
 function App() {
-  const [lanes, setLanes] = React.useState<Lane[]>(TEST_BOARD);
+  const [board, setBoard] = React.useState<Nestable<{}, Lane>>({
+    id: "board",
+    type: "board",
+    data: {},
+    children: TEST_BOARD,
+  });
 
-  const [activeDrag, setActiveDrag] =
-    React.useState<DragDroppableContext | null>(null);
-  const activeDimensions = React.useRef<Dimensions | undefined>(undefined);
+  const [activeDrag, setActiveDrag] = React.useState<DragContext | null>(null);
+  const dragDimensionsRef =
+    React.useRef<Dimensions | undefined>(undefined);
 
   let overlay = null;
 
   if (activeDrag?.type === "lane") {
-    const lane = lanes[activeDrag.indexPath[0]];
+    const lane = getEntityFromPath(board, activeDrag.path) as Lane;
     overlay = (
-      <DragDroppableOverlay orientation="horizontal" className="lane">
-        <DraggableLane
-          isOverlay
-          lane={lane}
-          laneIndex={activeDrag.indexPath[0]}
-        />
-      </DragDroppableOverlay>
+      <DraggableOverlay
+        orientation="horizontal"
+        className="lane-wrapper"
+      >
+        <DraggableLane isOverlay lane={lane} laneIndex={activeDrag.path[0]} />
+      </DraggableOverlay>
     );
   } else if (activeDrag?.type === "item") {
-    const item =
-      lanes[activeDrag.indexPath[0]].children[activeDrag.indexPath[1]];
+    const item = getEntityFromPath(board, activeDrag.path) as Item;
     overlay = (
-      <DragDroppableOverlay orientation="vertical" className="item">
+      <DraggableOverlay
+        orientation="vertical"
+        className="item-wrapper"
+      >
         <CardContent item={item} />
-      </DragDroppableOverlay>
+      </DraggableOverlay>
     );
   }
 
   return (
-    <OverlayDimensionsContext.Provider value={activeDimensions}>
-      <div className="app-header">Lorem Ipsum</div>
-      <div className="app">
-        <DndContext
-          onDragStart={(e) => {
-            if (!e.active.data.current) {
-              return;
-            }
+    <OverlayDimensionsContext.Provider value={dragDimensionsRef}>
+        <div className="app-header">Lorem Ipsum</div>
+        <div className="app">
+          <DndContext
+            onDragStart={({ active }) => {
+              if (!active.data.current) {
+                return;
+              }
 
-            console.log(e);
+              setActiveDrag(active.data.current as DragContext);
+            }}
+            onDragCancel={() => {
+              if (activeDrag) {
+                setActiveDrag(null);
+              }
+            }}
+            onDragOver={({ active }) => {
+              dragDimensionsRef.current = {
+                width: active.rect.current.initial?.width || 0,
+                height: active.rect.current.initial?.height || 0,
+              };
+            }}
+            onDragEnd={({ active, over }) => {
+              const mutation = getBoardFromDrag(board, active, over);
 
-            activeDimensions.current = {
-              width: e.active.rect.current.initial?.width || 0,
-              height: e.active.rect.current.initial?.height || 0,
-            };
+              if (mutation) {
+                setBoard(mutation);
+              }
 
-            const active = e.active.data.current as DragDroppableContext;
-
-            setActiveDrag(active);
-          }}
-          onDragCancel={() => {
-            if (activeDrag) {
-              setActiveDrag(null);
-            }
-          }}
-          onDragOver={(e) => {
-            activeDimensions.current = {
-              width: e.active.rect.current.initial?.width || 0,
-              height: e.active.rect.current.initial?.height || 0,
-            };
-          }}
-          onDragEnd={() => {
-            if (activeDrag) {
-              setActiveDrag(null);
-            }
-          }}
-        >
-          <DragDroppableList className="board" orientation="horizontal">
-            {lanes.map((lane, i) => (
-              <DragDroppable
-                className="lane"
-                id={lane.id}
-                indexPath={[i]}
-                key={lane.id}
-                orientation="horizontal"
-                type="lane"
-              >
-                <DraggableLane key={lane.id} lane={lane} laneIndex={i} />
-              </DragDroppable>
-            ))}
-          </DragDroppableList>
-          {createPortal(<DragOverlay>{overlay}</DragOverlay>, document.body)}
-        </DndContext>
-      </div>
+              if (activeDrag) {
+                setActiveDrag(null);
+              }
+            }}
+          >
+            <SortableList className="board" orientation="horizontal">
+              {board.children.map((lane, i) => (
+                <Sortable
+                  className="lane-wrapper"
+                  id={lane.id}
+                  path={[i]}
+                  key={lane.id}
+                  orientation="horizontal"
+                  type="lane"
+                >
+                  <DraggableLane key={lane.id} lane={lane} laneIndex={i} />
+                </Sortable>
+              ))}
+            </SortableList>
+            {createPortal(<DragOverlay className="drag-overlay">{overlay}</DragOverlay>, document.body)}
+          </DndContext>
+        </div>
     </OverlayDimensionsContext.Provider>
   );
 }

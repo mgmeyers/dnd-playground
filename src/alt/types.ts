@@ -1,14 +1,11 @@
-export enum SortableDirection {
-  Vertical,
-  Horizontal,
-}
+export type EntityPath = number[];
 
 export interface NestableProps {
   id: string;
   type: string;
 }
 
-export interface Nestable<D, T = never> extends NestableProps {
+export interface Nestable<D = any, T = any> extends NestableProps {
   children: T[];
   data: D;
 }
@@ -24,8 +21,6 @@ export interface LaneData {
 export type Item = Nestable<ItemData>
 export type Lane = Nestable<LaneData, Item>
 
-export interface DragContext<T> {
-  parentId: string | null;
-  indexPath: number[];
-  data: T;
+export interface DragContext extends NestableProps {
+  path: EntityPath;
 }

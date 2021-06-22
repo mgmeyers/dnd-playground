@@ -6,5 +6,5 @@ export interface Dimensions {
 }
 
 export const OverlayDimensionsContext = React.createContext<
-  React.RefObject<Dimensions | undefined>
->(React.createRef());
+  React.MutableRefObject<Dimensions | undefined>
+>(React.createRef() as React.MutableRefObject<Dimensions | undefined>);
