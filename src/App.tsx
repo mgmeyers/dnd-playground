@@ -1,10 +1,3 @@
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverEvent,
-  DragOverlay,
-  DragStartEvent,
-} from "@dnd-kit/core";
 import React from "react";
 import { createPortal } from "react-dom";
 import { LoremIpsum } from "lorem-ipsum";
@@ -12,9 +5,20 @@ import "./App.css";
 import { DragContext, Item, Lane, Nestable } from "./alt/types";
 import { DraggableLane } from "./alt/Lane";
 import { CardContent } from "./alt/Card";
-import { SortableList, DraggableOverlay, Sortable } from "./alt/DragDroppable";
-import { Dimensions, OverlayDimensionsContext } from "./alt/Context";
+import {
+  SortableList,
+  DraggableOverlay,
+  Sortable,
+  DragOverlay,
+} from "./alt/DragDroppable";
+import {
+  ActiveDragSetterContext,
+  Dimensions,
+  OverlayDimensionsContext,
+} from "./alt/Context";
 import { getBoardFromDrag, getEntityFromPath } from "./alt/helpers";
+import { DndProvider } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
 
 function generateInstanceId(): string {
   return Math.random().toString(36).substr(2, 9);
@@ -87,65 +91,62 @@ function App() {
     );
   }
 
-  const onDragStart = React.useCallback(({ active }: DragStartEvent) => {
-    if (!active.data.current) {
-      return;
-    }
+  // const onDragStart = React.useCallback(({ active }: DragStartEvent) => {
+  //   if (!active.data.current) {
+  //     return;
+  //   }
 
-    setActiveDrag(active.data.current as DragContext);
-  }, []);
+  //   setActiveDrag(active.data.current as DragContext);
+  // }, []);
 
-  const onDragCancel = React.useCallback(() => {
-    setActiveDrag(null);
-  }, []);
+  // const onDragCancel = React.useCallback(() => {
+  //   setActiveDrag(null);
+  // }, []);
 
-  const onDragOver = React.useCallback(({ active }: DragOverEvent) => {
-    dragDimensionsRef.current = {
-      width: active.rect.current.initial?.width || 0,
-      height: active.rect.current.initial?.height || 0,
-    };
-  }, []);
+  // const onDragOver = React.useCallback(({ active }: DragOverEvent) => {
+  //   dragDimensionsRef.current = {
+  //     width: active.rect.current.initial?.width || 0,
+  //     height: active.rect.current.initial?.height || 0,
+  //   };
+  // }, []);
 
-  const onDragEnd = React.useCallback(({ active, over }: DragEndEvent) => {
-    setBoard((board) => {
-      const newBoard = getBoardFromDrag(board, active, over);
-      if (newBoard) return newBoard;
-      return board;
-    });
+  // const onDragEnd = React.useCallback(({ active, over }: DragEndEvent) => {
+  //   setBoard((board) => {
+  //     const newBoard = getBoardFromDrag(board, active, over);
+  //     if (newBoard) return newBoard;
+  //     return board;
+  //   });
 
-    setActiveDrag(null);
-  }, []);
+  //   setActiveDrag(null);
+  // }, []);
 
   return (
     <OverlayDimensionsContext.Provider value={dragDimensionsRef}>
-      <div className="app-header">Lorem Ipsum</div>
-      <div className="app">
-        <DndContext
-          onDragStart={onDragStart}
-          onDragCancel={onDragCancel}
-          onDragOver={onDragOver}
-          onDragEnd={onDragEnd}
-        >
-          <SortableList className="board" orientation="horizontal">
-            {board.children.map((lane, i) => (
-              <Sortable
-                className="lane-wrapper"
-                id={lane.id}
-                path={[i]}
-                key={lane.id}
-                orientation="horizontal"
-                type="lane"
-              >
-                <DraggableLane key={lane.id} lane={lane} laneIndex={i} />
-              </Sortable>
-            ))}
-          </SortableList>
-          {createPortal(
-            <DragOverlay className="drag-overlay">{overlay}</DragOverlay>,
-            document.body
-          )}
-        </DndContext>
-      </div>
+      <ActiveDragSetterContext.Provider value={setActiveDrag}>
+        <div className="app-header">Lorem Ipsum</div>
+        <div className="app">
+          <DndProvider backend={HTML5Backend}>
+            <SortableList className="board" orientation="horizontal">
+              {board.children.map((lane, i) => (
+                <Sortable
+                  className="lane-wrapper"
+                  id={lane.id}
+                  path={[i]}
+                  key={lane.id}
+                  orientation="horizontal"
+                  type="lane"
+                >
+                  <DraggableLane key={lane.id} lane={lane} laneIndex={i} />
+                </Sortable>
+              ))}
+            </SortableList>
+            {createPortal(
+              <DragOverlay className="drag-overlay">{overlay}</DragOverlay>,
+              document.body
+            )}
+          </DndProvider>
+        </div>
+      </ActiveDragSetterContext.Provider>
     </OverlayDimensionsContext.Provider>
   );
 }

@@ -17,7 +17,7 @@ export function DraggableLane({
   return (
     <div className="lane">
       <div className="lane-title">{lane.data.title}</div>
-      <SortableList className="lane-items" orientation="vertical">
+      {/* <SortableList className="lane-items" orientation="vertical">
         {lane.children.map((item, i) => (
           <Sortable
             className="item-wrapper"
@@ -31,7 +31,7 @@ export function DraggableLane({
             <CardContent key={lane.id} item={item} />
           </Sortable>
         ))}
-      </SortableList>
+      </SortableList> */}
     </div>
   );
 }

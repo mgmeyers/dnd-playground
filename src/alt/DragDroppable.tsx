@@ -1,16 +1,17 @@
 import React from "react";
 import classcat from "classcat";
-import {
-  DraggableSyntheticListeners,
-  useDraggable,
-  useDroppable,
-} from "@dnd-kit/core";
 import { motion, TargetAndTransition, Variants } from "framer-motion";
 import { usePrevious } from "react-use";
 import { areEqualWithPath } from "../components/helpers";
-import { OverlayDimensionsContext } from "./Context";
+import {
+  ActiveDragSetterContext,
+  Dimensions,
+  OverlayDimensionsContext,
+} from "./Context";
 import { isNextSibling } from "./helpers";
 import { DragContext } from "./types";
+import { useDrag, useDragLayer, useDrop, XYCoord } from "react-dnd";
+import { getEmptyImage } from "react-dnd-html5-backend";
 
 const transition = {
   type: "tween",
@@ -51,10 +52,6 @@ interface DragDropableProps {
   children: React.ReactNode;
 }
 
-interface SwitchProps {
-  isOverlay?: boolean;
-}
-
 export const Sortable = React.memo(function Sortable({
   className,
   orientation,
@@ -62,78 +59,100 @@ export const Sortable = React.memo(function Sortable({
   type,
   path,
   children,
-  isOverlay,
-}: DragDropableProps & DragContext & SwitchProps) {
-  if (isOverlay) {
-    return (
-      <DraggableOverlay className={className} orientation={orientation}>
-        {children}
-      </DraggableOverlay>
-    );
-  }
-
-  return (
-    <DragDroppable
-      className={className}
-      orientation={orientation}
-      path={path}
-      type={type}
-      id={id}
-    >
-      {children}
-    </DragDroppable>
-  );
-},
-areEqualWithPath);
-
-export const DragDroppable = React.memo(function DragDroppable({
-  className,
-  orientation,
-  id,
-  type,
-  path,
-  children,
 }: DragDropableProps & DragContext) {
-  const params = {
-    id,
-    data: {
+  const dimensionsRef = React.useContext(OverlayDimensionsContext);
+  const setActiveDrag = React.useContext(ActiveDragSetterContext);
+  const [didReceiveDrop, setDidReceiveDrop] = React.useState(false);
+
+  const ref = React.useRef<HTMLElement | null>(null);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const memoedPath = React.useMemo(() => path, path);
+  const ctx: DragContext = React.useMemo(
+    () => ({
       id,
       type,
-      path,
+      path: memoedPath,
+    }),
+    [id, type, memoedPath]
+  );
+
+  const [{ isDragging, dr }, drag, preview] = useDrag(() => ({
+    type,
+    item: ctx,
+    end: () => { console.log('drag end') },
+    isDragging: (monitor) => {
+      return monitor.getItem().id === id;
     },
-  };
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+      dr: monitor.getDropResult(),
+    }),
+  }));
 
-  const {
-    isDragging,
-    setNodeRef: setDraggable,
-    listeners,
-    attributes,
-  } = useDraggable(params);
+  if (dr) console.log(dr)
 
-  const { isOver, active, setNodeRef: setDroppable } = useDroppable(params);
+  React.useEffect(() => {
+    preview(getEmptyImage(), { captureDraggingState: true })
+  }, [preview])
 
-  const prevIsOver = usePrevious(isOver);
-  const prevActive = usePrevious(active);
+  const [{ isOver, active }, drop] = useDrop(() => ({
+    accept: type,
+    canDrop: (source: DragContext) => {
+      return (
+        source.type === type &&
+        source.id !== id &&
+        !isNextSibling(source.path, memoedPath)
+      );
+    },
+    drop: (source) => {
+      console.log("source:", source, "dest:", ctx);
+      setDidReceiveDrop(true);
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver(),
+      active: monitor.getItem() as DragContext | null,
+    }),
+  }));
 
-  const didReceiveDrop = !!prevIsOver && !isOver && !!prevActive && !active;
+  React.useEffect(() => {
+    if (didReceiveDrop) {
+      setDidReceiveDrop(false);
+    }
+  }, [didReceiveDrop]);
+
+  React.useEffect(() => {
+    if (isDragging && ref.current) {
+      dimensionsRef.current = {
+        width: ref.current.clientWidth,
+        height: ref.current.clientHeight,
+      };
+    }
+  }, [isDragging, dimensionsRef]);
+
+  React.useEffect(() => {
+    if (isDragging) {
+      setActiveDrag(ctx);
+    }
+  }, [isDragging, setActiveDrag, ctx]);
 
   const setRef = React.useCallback(
     (el: HTMLElement | null) => {
-      setDroppable(el);
-      setDraggable(el);
+      drag(drop(el));
+      ref.current = el;
     },
-    [setDroppable, setDraggable]
+    [drag, drop]
   );
 
   const isActive =
     isOver &&
-    active?.id !== id &&
-    active?.data.current?.type === type &&
-    !isNextSibling(active.data.current.path, path);
+    !!active &&
+    active.id !== id &&
+    active.type === type &&
+    !isNextSibling(active.path, memoedPath);
 
   return (
     <DragDroppableInterior
-      attributes={attributes}
       className={useDragDroppableClass(
         orientation,
         isActive,
@@ -141,9 +160,8 @@ export const DragDroppable = React.memo(function DragDroppable({
         isDragging,
         className
       )}
-      isActive={isActive}
       didReceiveDrop={didReceiveDrop}
-      listeners={listeners}
+      isActive={isActive}
       orientation={orientation}
       setRef={setRef}
     >
@@ -178,26 +196,22 @@ export const DraggableOverlay = React.memo(function DraggableOverlay({
 });
 
 interface DragDroppableInteriorProps {
-  attributes?: { [k: string]: number | string | boolean | undefined };
   children: React.ReactNode;
   className: string;
   didReceiveDrop?: boolean;
   isActive?: boolean;
   isOverlay?: boolean;
-  listeners?: DraggableSyntheticListeners;
   orientation: Orientation;
   setRef?: (el: HTMLElement | null) => void;
   style?: React.CSSProperties;
 }
 
 export const DragDroppableInterior = React.memo(function DragDroppableInterior({
-  attributes,
   children,
   className,
   didReceiveDrop,
   isActive,
   isOverlay,
-  listeners,
   orientation,
   setRef,
   style,
@@ -240,10 +254,8 @@ export const DragDroppableInterior = React.memo(function DragDroppableInterior({
       transition={transition}
       className={wrapperClassName}
       ref={setRef}
-      {...listeners}
-      {...attributes}
     >
-      {!!listeners && (
+      {!isOverlay && (
         <Placeholder
           orientation={orientation}
           isOver={!!isActive}
@@ -331,6 +343,62 @@ export function SortableList({
           "sortable-list-horizontal": orientation === "horizontal",
           "sortable-list-vertical": orientation === "vertical",
         })}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function getDragOverlayStyles(
+  initialOffset: XYCoord | null,
+  currentOffset: XYCoord | null,
+  dimensionsRef: React.MutableRefObject<Dimensions | undefined>
+) {
+  if (!initialOffset || !currentOffset) {
+    return {
+      display: "none",
+    };
+  }
+
+  let { x, y } = currentOffset;
+
+  const transform = `translate(${x}px, ${y}px)`;
+
+  return {
+    transform,
+    width: dimensionsRef.current?.width || 0,
+    height: dimensionsRef.current?.height || 0,
+  };
+}
+
+interface DragLayerProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+export function DragOverlay({ className, children }: DragLayerProps) {
+  const dimensionsRef = React.useContext(OverlayDimensionsContext);
+  const { isDragging, initialOffset, currentOffset } = useDragLayer(
+    (monitor) => ({
+      initialOffset: monitor.getInitialSourceClientOffset(),
+      currentOffset: monitor.getSourceClientOffset(),
+      isDragging: monitor.isDragging(),
+    })
+  );
+
+  if (!isDragging || !children) {
+    return null;
+  }
+
+  return (
+    <div className={classcat([className, "drag-layer"])}>
+      <div
+        style={getDragOverlayStyles(
+          initialOffset,
+          currentOffset,
+          dimensionsRef
+        )}
       >
         {children}
       </div>
