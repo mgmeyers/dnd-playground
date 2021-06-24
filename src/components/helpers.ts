@@ -61,23 +61,23 @@ export function shallowEqual(
   return true;
 }
 
-export function areEqualWithPath(objA: MapAny, objB: MapAny) {
-  return shallowEqual(objA, objB, (k, a, b) => {
-    if (k === "path") {
-      return areArraysEqual(a, b);
-    }
+// export function areEqualWithPath(objA: MapAny, objB: MapAny) {
+//   return shallowEqual(objA, objB, (k, a, b) => {
+//     if (k === "path") {
+//       return areArraysEqual(a, b);
+//     }
 
-    return is(a, b);
-  });
-}
+//     return is(a, b);
+//   });
+// }
 
-export function areEqualWithCtx(objA: MapAny, objB: MapAny) {
-  return shallowEqual(objA, objB, (k, a, b) => {
-    if (k === "ctx") {
-      return areEqualWithPath(a, b);
-    }
+// export function areEqualWithCtx(objA: MapAny, objB: MapAny) {
+//   return shallowEqual(objA, objB, (k, a, b) => {
+//     if (k === "ctx") {
+//       return areEqualWithPath(a, b);
+//     }
 
-    return is(a, b);
-  });
-}
+//     return is(a, b);
+//   });
+// }
 

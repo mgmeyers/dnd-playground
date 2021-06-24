@@ -1,4 +1,4 @@
-export type EntityPath = number[];
+export type EntityPath = string;
 
 export interface NestableProps {
   id: string;

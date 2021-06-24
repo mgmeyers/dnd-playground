@@ -22,13 +22,13 @@ export function DraggableLane({
           <Sortable
             className="item-wrapper"
             id={item.id}
-            path={[laneIndex, i]}
+            path={`${laneIndex}.${i}`}
             key={item.id}
             orientation="vertical"
             type="item"
             isOverlay={isOverlay}
           >
-            <CardContent key={lane.id} item={item} />
+            <CardContent key={lane.id} title={item.data.title} />
           </Sortable>
         ))}
       </SortableList>

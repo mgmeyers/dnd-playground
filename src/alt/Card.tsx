@@ -2,12 +2,12 @@ import React from "react";
 import { Item } from "./types";
 
 interface ItemContentProps {
-  item: Item;
+  title: string;
 }
 
 export const CardContent = React.memo(function ItemContent({
-  item,
+  title,
 }: ItemContentProps) {
-  return <div className="item">{item.data.title}</div>;
+  return <div className="item">{title}</div>;
 });
 

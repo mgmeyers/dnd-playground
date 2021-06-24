@@ -7,7 +7,6 @@ import {
 } from "@dnd-kit/core";
 import { motion, TargetAndTransition, Variants } from "framer-motion";
 import { usePrevious } from "react-use";
-import { areEqualWithPath } from "../components/helpers";
 import { OverlayDimensionsContext } from "./Context";
 import { isNextSibling } from "./helpers";
 import { DragContext } from "./types";
@@ -83,8 +82,7 @@ export const Sortable = React.memo(function Sortable({
       {children}
     </DragDroppable>
   );
-},
-areEqualWithPath);
+});
 
 export const DragDroppable = React.memo(function DragDroppable({
   className,
@@ -150,8 +148,7 @@ export const DragDroppable = React.memo(function DragDroppable({
       {children}
     </DragDroppableInterior>
   );
-},
-areEqualWithPath);
+});
 
 export const DraggableOverlay = React.memo(function DraggableOverlay({
   orientation,
@@ -233,11 +230,11 @@ export const DragDroppableInterior = React.memo(function DragDroppableInterior({
     [isOverlay]
   );
 
+  // exit={exit}
+  // transition={transition}
   return (
-    <motion.div
+    <div
       style={combinedStyles}
-      exit={exit}
-      transition={transition}
       className={wrapperClassName}
       ref={setRef}
       {...listeners}
@@ -251,12 +248,12 @@ export const DragDroppableInterior = React.memo(function DragDroppableInterior({
         />
       )}
       <div className={className}>{children}</div>
-    </motion.div>
+    </div>
   );
 });
 
 const Placeholder = React.memo(
-  ({
+  function Placeholder({
     orientation,
     isOver,
     shouldSuppressAnimation,
@@ -264,48 +261,48 @@ const Placeholder = React.memo(
     orientation: Orientation;
     isOver: boolean;
     shouldSuppressAnimation: boolean;
-  }) => {
-    const dimensionsRef = React.useContext(OverlayDimensionsContext);
+  }) {
+    // const dimensionsRef = React.useContext(OverlayDimensionsContext);
 
-    const animationDimension = orientation === "vertical" ? "height" : "width";
-    const size = dimensionsRef.current
-      ? dimensionsRef.current[animationDimension]
-      : 0;
+    // const animationDimension = orientation === "vertical" ? "height" : "width";
+    // const size = dimensionsRef.current
+    //   ? dimensionsRef.current[animationDimension]
+    //   : 0;
 
-    const variants: Variants = React.useMemo(
-      () => ({
-        open: {
-          [animationDimension]: size,
-          transition,
-        },
-        openImmediately: {
-          [animationDimension]: size,
-          transition: noTransition,
-        },
-        close: {
-          [animationDimension]: 0,
-          transition,
-        },
-        closeImmediately: {
-          [animationDimension]: 0,
-          transition: noTransition,
-        },
-      }),
-      [animationDimension, size]
-    );
+    // const variants: Variants = React.useMemo(
+    //   () => ({
+    //     open: {
+    //       [animationDimension]: size,
+    //       transition,
+    //     },
+    //     openImmediately: {
+    //       [animationDimension]: size,
+    //       transition: noTransition,
+    //     },
+    //     close: {
+    //       [animationDimension]: 0,
+    //       transition,
+    //     },
+    //     closeImmediately: {
+    //       [animationDimension]: 0,
+    //       transition: noTransition,
+    //     },
+    //   }),
+    //   [animationDimension, size]
+    // );
 
-    let animate = shouldSuppressAnimation ? "closeImmediately" : "close";
+    // let animate = shouldSuppressAnimation ? "closeImmediately" : "close";
 
-    if (isOver) {
-      animate = shouldSuppressAnimation ? "openImmediately" : "open";
-    }
+    // if (isOver) {
+    //   animate = shouldSuppressAnimation ? "openImmediately" : "open";
+    // }
+    // initial="closeImmediately"
+    // animate={animate}
+    // variants={variants}
+    // transition={transition}
 
     return (
-      <motion.div
-        initial="closeImmediately"
-        animate={animate}
-        variants={variants}
-        transition={transition}
+      <div
         className={classcat([
           "drop-placeholder",
           {
@@ -319,21 +316,21 @@ const Placeholder = React.memo(
   }
 );
 
-export function SortableList({
+export const SortableList = React.memo(function SortableList({
   className,
   orientation,
   children,
-}: React.PropsWithChildren<{ className?: string; orientation: Orientation }>) {
+}: { children: React.ReactNode; className?: string; orientation: Orientation }) {
   return (
     <div className={className}>
-      <div
-        className={classcat({
-          "sortable-list-horizontal": orientation === "horizontal",
-          "sortable-list-vertical": orientation === "vertical",
-        })}
-      >
-        {children}
-      </div>
+        <div
+          className={classcat({
+            "sortable-list-horizontal": orientation === "horizontal",
+            "sortable-list-vertical": orientation === "vertical",
+          })}
+        >
+          {children}
+        </div>
     </div>
   );
-}
+});

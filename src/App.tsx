@@ -4,6 +4,8 @@ import {
   DragOverEvent,
   DragOverlay,
   DragStartEvent,
+  PointerSensor,
+  useSensor,
 } from "@dnd-kit/core";
 import React from "react";
 import { createPortal } from "react-dom";
@@ -15,6 +17,7 @@ import { CardContent } from "./alt/Card";
 import { SortableList, DraggableOverlay, Sortable } from "./alt/DragDroppable";
 import { Dimensions, OverlayDimensionsContext } from "./alt/Context";
 import { getBoardFromDrag, getEntityFromPath } from "./alt/helpers";
+import { useSensors } from "@dnd-kit/core";
 
 function generateInstanceId(): string {
   return Math.random().toString(36).substr(2, 9);
@@ -59,6 +62,7 @@ function generateLanes(n: number) {
 const TEST_BOARD = generateLanes(8);
 
 function App() {
+  const sensors = useSensors(useSensor(PointerSensor))
   const [board, setBoard] = React.useState<Nestable<{}, Lane>>({
     id: "board",
     type: "board",
@@ -75,14 +79,14 @@ function App() {
     const lane = getEntityFromPath(board, activeDrag.path) as Lane;
     overlay = (
       <DraggableOverlay orientation="horizontal" className="lane-wrapper">
-        <DraggableLane isOverlay lane={lane} laneIndex={activeDrag.path[0]} />
+        <DraggableLane isOverlay lane={lane} laneIndex={Number(activeDrag.path[0])} />
       </DraggableOverlay>
     );
   } else if (activeDrag?.type === "item") {
     const item = getEntityFromPath(board, activeDrag.path) as Item;
     overlay = (
       <DraggableOverlay orientation="vertical" className="item-wrapper">
-        <CardContent item={item} />
+        <CardContent title={item.data.title} />
       </DraggableOverlay>
     );
   }
@@ -121,6 +125,7 @@ function App() {
       <div className="app-header">Lorem Ipsum</div>
       <div className="app">
         <DndContext
+          sensors={sensors}
           onDragStart={onDragStart}
           onDragCancel={onDragCancel}
           onDragOver={onDragOver}
@@ -131,7 +136,7 @@ function App() {
               <Sortable
                 className="lane-wrapper"
                 id={lane.id}
-                path={[i]}
+                path={`${i}`}
                 key={lane.id}
                 orientation="horizontal"
                 type="lane"

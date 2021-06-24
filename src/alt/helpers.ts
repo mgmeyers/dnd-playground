@@ -3,18 +3,30 @@ import update, { Spec } from "immutability-helper";
 import { Nestable, EntityPath, DragContext } from "./types";
 import merge from "deepmerge";
 
+function getStep(source: EntityPath, index: number) {
+  if (index % 2 !== 0) {
+    throw Error(`Attempted to access path separator: ${source}, ${index}`);
+  }
+
+  return Number(source[index]);
+}
+
 export function isNextSibling(source: EntityPath, sib: EntityPath): boolean {
   if (source.length !== sib.length) {
     return false;
   }
 
-  return source.every((step, index) => {
-    if (index === source.length - 1) {
-      return step === sib[index] - 1;
+  for (let i = 0, len = source.length; i < 0; i++) {
+    if (i === len - 1) {
+      return getStep(source, i) === getStep(sib, i) + 1;
     }
 
-    return step === sib[index];
-  });
+    if (source[i] !== sib[i]) {
+      return false;
+    }
+  }
+
+  return false;
 }
 
 export function areSiblings(source: EntityPath, sib: EntityPath): boolean {
@@ -22,13 +34,17 @@ export function areSiblings(source: EntityPath, sib: EntityPath): boolean {
     return false;
   }
 
-  return source.every((step, index) => {
-    if (index === source.length - 1) {
-      return step !== sib[index];
+  for (let i = 0, len = source.length; i < 0; i++) {
+    if (i === len - 1 && source[i] === sib[i]) {
+      return false;
     }
 
-    return step === sib[index];
-  });
+    if (source[i] !== sib[i]) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export enum SiblingDirection {
@@ -55,8 +71,10 @@ export function getSiblingDirection(
 }
 
 export function getEntityFromPath(root: Nestable, path: EntityPath): Nestable {
-  if (path[0] !== undefined && root.children && root.children[path[0]]) {
-    return getEntityFromPath(root.children[path[0]], path.slice(1));
+  const step = !!path.length && getStep(path, 0)
+  
+  if (step !== false && root.children && root.children[step]) {
+    return getEntityFromPath(root.children[step], path.slice(2));
   }
 
   return root;
@@ -65,14 +83,14 @@ export function getEntityFromPath(root: Nestable, path: EntityPath): Nestable {
 export function buildRemoveMutation(path: EntityPath) {
   let mutation: Spec<Nestable> = {
     children: {
-      $splice: [[path[path.length - 1], 1]],
+      $splice: [[getStep(path, path.length - 1), 1]],
     },
   };
 
-  for (let i = path.length - 2; i >= 0; i--) {
+  for (let i = path.length - 3; i >= 0; i -= 2) {
     mutation = {
       children: {
-        [path[i]]: mutation,
+        [getStep(path, i)]: mutation,
       },
     };
   }
@@ -91,16 +109,16 @@ export function buildInsertMutation(
   let destinationModifier = 1;
 
   if (inSameList && source && source[len - 1] < destination[len - 1]) {
-    destinationModifier = 2;
+    destinationModifier = 3;
   }
 
   let mutation: Spec<Nestable> = {
     children: {
-      $splice: [[destination[len - destinationModifier], 0, entity]],
+      $splice: [[getStep(destination, len - destinationModifier), 0, entity]],
     },
   };
 
-  for (let i = destination.length - 2; i >= 0; i--) {
+  for (let i = destination.length - 3; i >= 0; i -= 2) {
     mutation = {
       children: {
         [destination[i]]: mutation,
