@@ -21,6 +21,32 @@ function HitBoxDebug({ hitbox }: HitBoxDebugProps) {
   return <div className="hitbox" style={style}></div>;
 }
 
+export function DebugScrollContainers({
+  hitboxes,
+}: {
+  hitboxes: React.RefObject<Map<string, Entity>>;
+}) {
+  const [, update] = React.useState(0);
+
+  useRaf(({ time }) => {
+    update(time);
+  }, []);
+
+  if (!hitboxes.current) return null;
+
+  return (
+    <>
+      {Array.from(hitboxes.current.entries())
+        .filter(([id, hb]) => {
+          return hb.getData().type === "scrollContainer";
+        })
+        .map(([id, hb]) => {
+          return <HitBoxDebug key={id} hitbox={hb.getHitbox()} />;
+        })}
+    </>
+  );
+}
+
 export function Debug({
   hitboxes,
 }: {
@@ -37,8 +63,8 @@ export function Debug({
   return (
     <>
       {Array.from(hitboxes.current.entries()).map(([id, hb]) => {
-        return <HitBoxDebug key={id} hitbox={hb.getHitbox()} />;
-      })}
+          return <HitBoxDebug key={id} hitbox={hb.getHitbox()} />;
+        })}
     </>
   );
 }

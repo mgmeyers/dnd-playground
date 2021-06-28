@@ -1,86 +1,94 @@
 import { ScrollMotionValues, useElementScroll } from "framer-motion";
 import React from "react";
-import { adjustHitbox, calculateHitbox, numberOrZero } from "./helpers";
+import { generateInstanceId } from "./data";
+import {
+  adjustHitbox,
+  calculateHitbox,
+  calculateScrollHitbox,
+  numberOrZero,
+} from "./helpers";
 import {
   Coordinates,
   Entity,
+  EntityData,
   EntityPath,
+  Orientation,
   ScrollShift,
   WithChildren,
 } from "./types";
-
-export interface HitboxManager {
-  hitboxes: React.RefObject<Map<string, Entity>>;
-  registerHitbox(id: string, entity: Entity): void;
-  unregisterHitbox(id: string): void;
-  getEntity(id: string): Entity | undefined;
-}
+import { createEmitter, Emitter, Unsubscribe } from "./emitter";
 
 export type IntersectionObserverHandler = (
   entry: IntersectionObserverEntry
 ) => void;
 
-export interface IntersectionObserverManager {
-  register(element: HTMLElement): void;
-  unregister(element: HTMLElement): void;
-  registerObserverHandler(
+interface GlobalEvents {
+  registerHitbox(id: string, entity: Entity): void;
+  unregisterHitbox(id: string): void;
+
+  observeResize(element: HTMLElement): void;
+  unobserveResize(element: HTMLElement): void;
+
+  dragStartInternal(e: PointerEvent, id: string): void;
+  dragMoveInternal(e: PointerEvent, id: string): void;
+  dragScrollInternal(id: string): void;
+  dragEndInternal(e: PointerEvent, id: string): void;
+  dragStart(id: string, origin: Coordinates, position: Coordinates): void;
+  dragMove(id: string, origin: Coordinates, position: Coordinates): void;
+  dragEnd(
+    id: string,
+    origin: Coordinates,
+    position: Coordinates,
+    dropTarget: Entity | null
+  ): void;
+
+  beginDragIntersect(dragId: string, intersectingEntity: Entity): void;
+  endDragIntersect(dragId: string, intersectingEntity: Entity): void;
+
+  beginScrollIntersect(
+    dragId: string,
+    intersectingEntity: Entity,
+    ratio: number
+  ): void;
+  updateScrollIntersect(
+    dragId: string,
+    intersectingEntity: Entity,
+    ratio: number
+  ): void;
+  endScrollIntersect(
+    dragId: string,
+    intersectingEntity: Entity,
+    ratio: number
+  ): void;
+}
+
+interface IntersectionObserverEvents {
+  observeIntersection(element: HTMLElement): void;
+  unobserveIntersection(element: HTMLElement): void;
+  registerIntersectionHandler(
     id: string,
     handler: IntersectionObserverHandler
   ): void;
-  unregisterObserverHandler(id: string): void;
+  unregisterIntersectionHandler(id: string): void;
 }
 
-export interface ResizeObserverManager {
-  register(element: HTMLElement): void;
-  unregister(element: HTMLElement): void;
+export interface HitboxManager {
+  hitboxes: React.RefObject<Map<string, Entity>>;
+  getEntity(id: string): Entity | undefined;
 }
 
-export type DragHandler = (
-  id: string,
-  origin: Coordinates,
-  position: Coordinates
-) => void;
+export const EventContext = React.createContext<Emitter<GlobalEvents>>(
+  createEmitter()
+);
 
-export interface DragManager {
-  origin?: Coordinates;
-  position?: Coordinates;
-  activeId?: string;
-  emitDragStart(e: PointerEvent, id: string): void;
-  emitDragMove(e: PointerEvent): void;
-  emitDragEnd(e: PointerEvent): void;
-  registerListeners(
-    onStart: DragHandler,
-    onMove: DragHandler,
-    onEnd: DragHandler
-  ): void;
-  unregisterListeners(
-    onStart: DragHandler,
-    onMove: DragHandler,
-    onEnd: DragHandler
-  ): void;
-}
+export const IntersectionObserverEventContext =
+  React.createContext<Emitter<IntersectionObserverEvents> | null>(null);
 
 export const HitboxManagerContext = React.createContext<HitboxManager>({
   hitboxes: React.createRef(),
-  registerHitbox() {},
-  unregisterHitbox() {},
   getEntity() {
     return undefined;
   },
-});
-
-export const ResizeObserverManagerContext =
-  React.createContext<ResizeObserverManager>({
-    register() {},
-    unregister() {},
-  });
-
-export const DragManagerContext = React.createContext<DragManager>({
-  emitDragStart() {},
-  emitDragMove() {},
-  emitDragEnd() {},
-  registerListeners() {},
-  unregisterListeners() {},
 });
 
 export const ScrollMotionContext = React.createContext<
@@ -91,14 +99,15 @@ export const ScrollShiftContext = React.createContext<
   React.RefObject<ScrollShift>
 >(React.createRef());
 
-export const IntersectionObserverManagerContext =
-  React.createContext<IntersectionObserverManager | null>(null);
-
 export const EntityContainerContext = React.createContext<
   React.MutableRefObject<Map<string, Entity> | null>
 >(React.createRef());
 
 export const EntityPathContext = React.createContext<
+  React.RefObject<EntityPath>
+>(React.createRef());
+
+export const ScrollPathContext = React.createContext<
   React.RefObject<EntityPath>
 >(React.createRef());
 
@@ -109,22 +118,73 @@ export function RootContext({ children }: WithChildren) {
     () => ({
       hitboxes,
       getEntity(id: string) {
-        return this.hitboxes.current?.get(id);
-      },
-      registerHitbox(id: string, entity: Entity) {
-        this.hitboxes.current?.set(id, entity);
-      },
-      unregisterHitbox(id: string) {
-        this.hitboxes.current?.delete(id);
+        return hitboxes.current.get(id);
       },
     }),
     []
   );
-
-  const resizeObserver = React.useRef<ResizeObserver>();
+  const emitter = React.useMemo(() => {
+    return createEmitter<GlobalEvents>();
+  }, []);
 
   React.useEffect(() => {
-    resizeObserver.current = new ResizeObserver(() => {
+    let dragOrigin: Coordinates | undefined;
+    let dragPosition: Coordinates | undefined;
+
+    const unsubscribers: Unsubscribe[] = [
+      emitter.on("registerHitbox", (id, entity) => {
+        hitboxes.current.set(id, entity);
+      }),
+
+      emitter.on("unregisterHitbox", (id) => {
+        hitboxes.current.delete(id);
+      }),
+
+      emitter.on("dragStartInternal", (e, id) => {
+        dragOrigin = { x: e.screenX, y: e.screenY };
+        dragPosition = { x: e.screenX, y: e.screenY };
+
+        emitter.emit("dragStart", id, dragOrigin, dragPosition);
+      }),
+
+      emitter.on("dragMoveInternal", (e, id) => {
+        dragPosition = { x: e.screenX, y: e.screenY };
+
+        emitter.emit(
+          "dragMove",
+          id,
+          dragOrigin || { x: e.screenX, y: e.screenY },
+          dragPosition
+        );
+      }),
+
+      emitter.on("dragScrollInternal", (id) => {
+        if (dragOrigin && dragPosition) {
+          emitter.emit("dragMove", id, dragOrigin, dragPosition);
+        }
+      }),
+
+      emitter.on("dragEndInternal", (e, id) => {
+        emitter.emit(
+          "dragEnd",
+          id,
+          dragOrigin || { x: e.screenX, y: e.screenY },
+          { x: e.screenX, y: e.screenY },
+          null
+        );
+
+        dragOrigin = undefined;
+        dragPosition = undefined;
+      }),
+    ];
+
+    return () => {
+      unsubscribers.forEach((fn) => fn());
+    };
+  }, [emitter]);
+
+  React.useEffect(() => {
+    const observer = new ResizeObserver(() => {
       clearInterval(debounceRef.current);
 
       debounceRef.current = window.setTimeout(() => {
@@ -134,122 +194,305 @@ export function RootContext({ children }: WithChildren) {
       }, 120);
     });
 
-    return () => resizeObserver.current?.disconnect();
-  }, []);
+    const unsubscribers: Unsubscribe[] = [];
 
-  const resizeObserverManager = React.useMemo<ResizeObserverManager>(() => {
-    return {
-      register(element) {
-        resizeObserver.current?.observe(element, { box: "border-box" });
-      },
-      unregister(element) {
-        resizeObserver.current?.unobserve(element);
-      },
+    unsubscribers.push(
+      emitter.on("observeResize", (element) => {
+        observer.observe(element, { box: "border-box" });
+      })
+    );
+
+    unsubscribers.push(
+      emitter.on("unobserveResize", (element) => {
+        observer.unobserve(element);
+      })
+    );
+
+    return () => {
+      observer.disconnect();
+      unsubscribers.forEach((fn) => fn());
     };
-  }, []);
-
-  const dragOrigin = React.useRef<Coordinates | undefined>();
-  const dragPosition = React.useRef<Coordinates | undefined>();
-  const activeId = React.useRef<string | undefined>();
-
-  const dragStartListeners = React.useRef<Array<DragHandler>>([]);
-  const dragMoveListeners = React.useRef<Array<DragHandler>>([]);
-  const dragEndListeners = React.useRef<Array<DragHandler>>([]);
-
-  const emitDragStart = React.useCallback((e: PointerEvent, id: string) => {
-    activeId.current = id;
-    dragOrigin.current = { x: e.screenX, y: e.screenY };
-    dragPosition.current = { x: e.screenX, y: e.screenY };
-
-    dragStartListeners.current.forEach((listener) => {
-      if (activeId.current && dragOrigin.current && dragPosition.current) {
-        listener(activeId.current, dragOrigin.current, dragPosition.current);
-      }
-    });
-  }, []);
-
-  const emitDragMove = React.useCallback((e: PointerEvent) => {
-    dragPosition.current = { x: e.screenX, y: e.screenY };
-    dragMoveListeners.current.forEach((listener) => {
-      if (activeId.current && dragOrigin.current && dragPosition.current) {
-        listener(activeId.current, dragOrigin.current, dragPosition.current);
-      }
-    });
-  }, []);
-
-  const emitDragEnd = React.useCallback(() => {
-    dragEndListeners.current.forEach((listener) => {
-      if (activeId.current && dragOrigin.current && dragPosition.current) {
-        listener(activeId.current, dragOrigin.current, dragPosition.current);
-      }
-    });
-    activeId.current = undefined;
-    dragOrigin.current = undefined;
-    dragPosition.current = undefined;
-  }, []);
-
-  const dragManager = React.useMemo<DragManager>(() => {
-    return {
-      emitDragStart,
-      emitDragMove,
-      emitDragEnd,
-      get dragOrigin() {
-        return dragOrigin.current;
-      },
-      get dragPosition() {
-        return dragPosition.current;
-      },
-      get activeId() {
-        return activeId.current;
-      },
-      registerListeners(onStart, onMove, onEnd) {
-        dragStartListeners.current.push(onStart);
-        dragMoveListeners.current.push(onMove);
-        dragEndListeners.current.push(onEnd);
-      },
-      unregisterListeners(onStart, onMove, onEnd) {
-        dragStartListeners.current = dragStartListeners.current.filter(
-          (fn) => fn !== onStart
-        );
-        dragMoveListeners.current = dragMoveListeners.current.filter(
-          (fn) => fn !== onMove
-        );
-        dragEndListeners.current = dragEndListeners.current.filter(
-          (fn) => fn !== onEnd
-        );
-      },
-    };
-  }, [emitDragStart, emitDragMove, emitDragEnd]);
+  }, [emitter]);
 
   return (
-    <ResizeObserverManagerContext.Provider value={resizeObserverManager}>
+    <EventContext.Provider value={emitter}>
       <HitboxManagerContext.Provider value={hitboxManager}>
-        <DragManagerContext.Provider value={dragManager}>
-          {children}
-          {/* <Debug hitboxes={hitboxes} /> */}
-        </DragManagerContext.Provider>
+        {/* <DragManagerContext.Provider value={dragManager}> */}
+        {children}
+        {/* <DebugScrollContainers hitboxes={hitboxes} /> */}
+        {/* </DragManagerContext.Provider> */}
       </HitboxManagerContext.Provider>
-    </ResizeObserverManagerContext.Provider>
+    </EventContext.Provider>
   );
 }
 
 interface ScrollContextProps extends WithChildren {
+  orientation: Orientation;
   scrollRef: React.MutableRefObject<HTMLElement | null>;
+  triggerTypes?: string[];
 }
 
-export function ScrollContext({ scrollRef, children }: ScrollContextProps) {
+export function ScrollContext({
+  orientation,
+  scrollRef,
+  triggerTypes,
+  children,
+}: ScrollContextProps) {
+  const scrollId = React.useMemo(() => generateInstanceId(), []);
+  const emitter = React.useMemo(() => {
+    return createEmitter<IntersectionObserverEvents>();
+  }, []);
+  const eventContext = React.useContext(EventContext);
+  const parentEntityContainer = React.useContext(EntityContainerContext);
+  const hitboxManager = React.useContext(HitboxManagerContext);
   const scrollRefContext = React.useContext(ScrollMotionContext);
   const scrollShiftRefContext = React.useContext(ScrollShiftContext);
   const scrollValues = useElementScroll(scrollRef);
   const scrollMotionRef = React.useRef<ScrollMotionValues | null>(scrollValues);
+  const parentScrollPathContainer = React.useContext(ScrollPathContext);
+  const adjustHitboxMemoed = React.useCallback(adjustHitbox, []);
+  const triggerTypeRef = React.useRef(triggerTypes);
+  const [observerReady, setObserverReady] = React.useState(false);
 
-  const observerHandlerMap = React.useRef<{
-    [id: string]: IntersectionObserverHandler;
-  }>({});
+  const beforePathRef = React.useRef<EntityPath>({
+    get path() {
+      return [...(parentScrollPathContainer.current?.path || []), 0];
+    },
+  });
 
-  const [observer, setObserver] = React.useState<IntersectionObserver | null>(
-    null
-  );
+  const afterPathRef = React.useRef<EntityPath>({
+    get path() {
+      return [...(parentScrollPathContainer.current?.path || []), 1];
+    },
+  });
+
+  triggerTypeRef.current = triggerTypes;
+
+  React.useEffect(() => {
+    if (observerReady && scrollRef.current) {
+      const beforeId = scrollId + "before";
+      const afterId = scrollId + "after";
+      const parentContainer = parentEntityContainer.current;
+
+      const beforeHitbox: Entity = {
+        initial: calculateScrollHitbox(
+          scrollRef.current.getBoundingClientRect(),
+          scrollRefContext.current,
+          scrollShiftRefContext.current,
+          orientation,
+          "before"
+        ),
+        scrollRef: scrollRefContext,
+        scrollShiftRef: scrollShiftRefContext,
+        pathRef: beforePathRef,
+        recalcInitial() {
+          if (scrollRef.current) {
+            this.initial = calculateScrollHitbox(
+              scrollRef.current.getBoundingClientRect(),
+              scrollRefContext.current,
+              scrollShiftRefContext.current,
+              orientation,
+              "before"
+            );
+          }
+        },
+        getHitbox() {
+          return adjustHitboxMemoed(
+            this.initial[0],
+            this.initial[1],
+            this.initial[2],
+            this.initial[3],
+            this.scrollRef.current,
+            this.scrollShiftRef.current
+          );
+        },
+        getData() {
+          return {
+            id: beforeId,
+            type: "scrollContainer",
+            side: "before",
+            orientation,
+            accepts: triggerTypeRef.current || [],
+            scrollContainer: scrollRef.current,
+          };
+        },
+      };
+
+      const afterHitbox: Entity = {
+        initial: calculateScrollHitbox(
+          scrollRef.current.getBoundingClientRect(),
+          scrollRefContext.current,
+          scrollShiftRefContext.current,
+          orientation,
+          "after"
+        ),
+        scrollRef: scrollRefContext,
+        scrollShiftRef: scrollShiftRefContext,
+        pathRef: afterPathRef,
+        recalcInitial() {
+          if (scrollRef.current) {
+            this.initial = calculateScrollHitbox(
+              scrollRef.current.getBoundingClientRect(),
+              scrollRefContext.current,
+              scrollShiftRefContext.current,
+              orientation,
+              "after"
+            );
+          }
+        },
+        getHitbox() {
+          return adjustHitboxMemoed(
+            this.initial[0],
+            this.initial[1],
+            this.initial[2],
+            this.initial[3],
+            this.scrollRef.current,
+            this.scrollShiftRef.current
+          );
+        },
+        getData() {
+          return {
+            id: afterId,
+            type: "scrollContainer",
+            side: "after",
+            orientation,
+            accepts: triggerTypeRef.current || [],
+            scrollContainer: scrollRef.current,
+          };
+        },
+      };
+
+      const scrollProgress =
+        orientation === "horizontal"
+          ? scrollValues.scrollXProgress
+          : scrollValues.scrollYProgress;
+
+      const updateHitboxes = () => {
+        if (
+          scrollProgress.get() > 0 &&
+          !hitboxManager.hitboxes.current?.has(beforeId)
+        ) {
+          eventContext.emit("registerHitbox", beforeId, beforeHitbox);
+          parentContainer?.set(beforeId, beforeHitbox);
+        } else if (
+          scrollProgress.get() === 0 &&
+          hitboxManager.hitboxes.current?.has(beforeId)
+        ) {
+          eventContext.emit("unregisterHitbox", beforeId);
+          parentContainer?.delete(beforeId);
+        }
+
+        if (
+          scrollProgress.get() < 1 &&
+          !hitboxManager.hitboxes.current?.has(afterId)
+        ) {
+          eventContext.emit("registerHitbox", afterId, afterHitbox);
+          parentContainer?.set(afterId, afterHitbox);
+        } else if (
+          scrollProgress.get() === 1 &&
+          hitboxManager.hitboxes.current?.has(afterId)
+        ) {
+          eventContext.emit("unregisterHitbox", afterId);
+          parentContainer?.delete(afterId);
+        }
+      };
+
+      const cancel = scrollProgress.onChange(updateHitboxes);
+
+      updateHitboxes();
+
+      let dragId: string | null = null;
+      let isScrolling = false;
+      let scrollStrength = 0;
+      let frame = 0;
+
+      const scroll = (direction: "before" | "after") => {
+        frame = requestAnimationFrame(() => {
+          if (!isScrolling) return;
+
+          scrollRef.current?.scrollBy({
+            [orientation === "horizontal" ? "left" : "top"]:
+              direction === "before"
+                ? -25 * scrollStrength
+                : 25 * scrollStrength,
+          });
+
+          if (dragId) {
+            eventContext.emit("dragScrollInternal", dragId);
+          }
+
+          scroll(direction);
+        });
+      };
+
+      const unsubscribers: Unsubscribe[] = [
+        eventContext.on("beginScrollIntersect", (id, scrollEntity, ratio) => {
+          if (scrollEntity === beforeHitbox) {
+            dragId = id;
+            isScrolling = true;
+            scrollStrength = ratio;
+            scroll("before");
+          } else if (scrollEntity === afterHitbox) {
+            dragId = id;
+            isScrolling = true;
+            scrollStrength = ratio;
+            scroll("after");
+          }
+        }),
+
+        eventContext.on("updateScrollIntersect", (_, scrollEntity, ratio) => {
+          if (scrollEntity === beforeHitbox || scrollEntity === afterHitbox) {
+            scrollStrength = ratio;
+          }
+        }),
+
+        eventContext.on("endScrollIntersect", (_, scrollEntity) => {
+          if (scrollEntity === beforeHitbox || scrollEntity === afterHitbox) {
+            dragId = null;
+            scrollStrength = 0;
+            isScrolling = false;
+            cancelAnimationFrame(frame);
+          }
+        }),
+      ];
+
+      return () => {
+        if (hitboxManager.hitboxes.current?.has(beforeId)) {
+          eventContext.emit("unregisterHitbox", beforeId);
+        }
+
+        if (parentContainer?.has(beforeId)) {
+          parentContainer.delete(beforeId);
+        }
+
+        if (hitboxManager.hitboxes.current?.has(afterId)) {
+          eventContext.emit("unregisterHitbox", afterId);
+        }
+
+        if (parentContainer?.has(afterId)) {
+          parentContainer.delete(afterId);
+        }
+
+        unsubscribers.forEach((fn) => fn());
+
+        cancel();
+      };
+    }
+  }, [
+    observerReady,
+    orientation,
+    scrollValues,
+    scrollId,
+
+    //
+    eventContext,
+    adjustHitboxMemoed,
+    hitboxManager,
+    parentEntityContainer,
+    scrollRef,
+    scrollRefContext,
+    scrollShiftRefContext,
+  ]);
 
   const scrollShiftRef = React.useRef<ScrollShift>({
     get x() {
@@ -267,78 +510,76 @@ export function ScrollContext({ scrollRef, children }: ScrollContextProps) {
   });
 
   React.useEffect(() => {
-    if (!observer && scrollRef.current) {
-      setObserver(
-        new IntersectionObserver(
-          (entries) => {
-            entries.forEach((entry) => {
-              if (entry.target instanceof HTMLElement) {
-                const targetId = entry.target.dataset.hitboxid;
+    if (scrollRef.current) {
+      const handlerMap: {
+        [id: string]: IntersectionObserverHandler;
+      } = {};
 
-                if (targetId && observerHandlerMap.current[targetId]) {
-                  observerHandlerMap.current[targetId](entry);
-                }
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.target instanceof HTMLElement) {
+              const targetId = entry.target.dataset.hitboxid;
+
+              if (targetId && handlerMap[targetId]) {
+                handlerMap[targetId](entry);
               }
-            });
-          },
-          {
-            root: scrollRef.current,
-            threshold: 0.5,
-          }
-        )
+            }
+          });
+        },
+        {
+          root: scrollRef.current,
+          threshold: 0.25,
+        }
       );
-    }
 
-    return () => {
-      if (observer) {
+      const unsubscribers: Unsubscribe[] = [];
+
+      unsubscribers.push(
+        emitter.on("registerIntersectionHandler", (id, handler) => {
+          handlerMap[id] = handler;
+        })
+      );
+
+      unsubscribers.push(
+        emitter.on("unregisterIntersectionHandler", (id) => {
+          delete handlerMap[id];
+        })
+      );
+
+      unsubscribers.push(
+        emitter.on("observeIntersection", (element) => {
+          observer.observe(element);
+        })
+      );
+
+      unsubscribers.push(
+        emitter.on("unobserveIntersection", (element) => {
+          observer.unobserve(element);
+        })
+      );
+
+      setObserverReady(true);
+
+      return () => {
         observer.disconnect();
-      }
-    };
-  }, [observer, scrollRef]);
-
-  const registerObserverHandler = React.useCallback(
-    (id: string, handler: IntersectionObserverHandler) => {
-      observerHandlerMap.current[id] = handler;
-    },
-    []
-  );
-
-  const unregisterObserverHandler = React.useCallback((id: string) => {
-    delete observerHandlerMap.current[id];
-  }, []);
-
-  const register = React.useCallback(
-    (element: HTMLElement) => {
-      observer?.observe(element);
-    },
-    [observer]
-  );
-
-  const unregister = React.useCallback(
-    (element: HTMLElement) => {
-      observer?.unobserve(element);
-    },
-    [observer]
-  );
-
-  const contextValue = React.useMemo(
-    () => ({
-      registerObserverHandler,
-      unregisterObserverHandler,
-      register,
-      unregister,
-    }),
-    [registerObserverHandler, unregisterObserverHandler, register, unregister]
-  );
+        unsubscribers.forEach((fn) => fn());
+      };
+    }
+  }, [scrollId, scrollRef, emitter]);
 
   return (
-    <ScrollShiftContext.Provider value={scrollShiftRef}>
-      <ScrollMotionContext.Provider value={scrollMotionRef}>
-        <IntersectionObserverManagerContext.Provider value={contextValue}>
-          {children}
-        </IntersectionObserverManagerContext.Provider>
-      </ScrollMotionContext.Provider>
-    </ScrollShiftContext.Provider>
+    <IntersectionObserverEventContext.Provider
+      value={observerReady ? emitter : null}
+    >
+      <ScrollShiftContext.Provider value={scrollShiftRef}>
+        <ScrollMotionContext.Provider value={scrollMotionRef}>
+          <ScrollPathContext.Provider value={beforePathRef}>
+            {children}
+          </ScrollPathContext.Provider>
+        </ScrollMotionContext.Provider>
+      </ScrollShiftContext.Provider>
+    </IntersectionObserverEventContext.Provider>
   );
 }
 
@@ -346,7 +587,7 @@ interface HitboxContextProps extends WithChildren {
   id: string;
   index: number;
   hitboxRef: React.MutableRefObject<HTMLElement | null>;
-  data?: Record<string, any>;
+  data: EntityData;
 }
 
 export function HitboxContext({
@@ -356,13 +597,15 @@ export function HitboxContext({
   children,
   data,
 }: HitboxContextProps) {
+  const eventContext = React.useContext(EventContext);
+  const intersectionObserverEventContext = React.useContext(
+    IntersectionObserverEventContext
+  );
   const parentEntityContainer = React.useContext(EntityContainerContext);
   const parentPathContainer = React.useContext(EntityPathContext);
   const hitboxManager = React.useContext(HitboxManagerContext);
-  const observerContext = React.useContext(IntersectionObserverManagerContext);
   const scrollRefContext = React.useContext(ScrollMotionContext);
   const scrollShiftRefContext = React.useContext(ScrollShiftContext);
-  const resizeObserverContext = React.useContext(ResizeObserverManagerContext);
 
   const pathRef = React.useRef<EntityPath>({
     get path() {
@@ -375,92 +618,92 @@ export function HitboxContext({
     new Map()
   );
 
-  const isDragging = false;
   const adjustHitboxMemoed = React.useCallback(adjustHitbox, []);
-
   const dataRef = React.useRef(data);
 
   dataRef.current = data;
 
   React.useEffect(() => {
-    if (observerContext && hitboxRef.current) {
-      const parentContainer = parentEntityContainer.current;
+    if (intersectionObserverEventContext && hitboxRef.current) {
       const target = hitboxRef.current;
 
       target.dataset.hitboxid = id;
 
-      observerContext.register(target);
-      observerContext.registerObserverHandler(id, (entry) => {
-        if (isDragging) {
-          return;
-        }
-
-        if (entry.isIntersecting) {
-          entityRef.current = {
-            initial: calculateHitbox(
-              entry.boundingClientRect,
-              scrollRefContext.current,
-              scrollShiftRefContext.current
-            ),
-            scrollRef: scrollRefContext,
-            scrollShiftRef: scrollShiftRefContext,
-            pathRef: pathRef,
-            recalcInitial() {
-              this.initial = calculateHitbox(
-                entry.target.getBoundingClientRect(),
+      intersectionObserverEventContext.emit("observeIntersection", target);
+      intersectionObserverEventContext.emit(
+        "registerIntersectionHandler",
+        id,
+        (entry) => {
+          if (entry.isIntersecting) {
+            entityRef.current = {
+              initial: calculateHitbox(
+                entry.boundingClientRect,
                 scrollRefContext.current,
                 scrollShiftRefContext.current
-              );
-            },
-            getHitbox() {
-              return adjustHitboxMemoed(
-                this.initial[0],
-                this.initial[1],
-                this.initial[2],
-                this.initial[3],
-                this.scrollRef.current,
-                this.scrollShiftRef.current
-              );
-            },
-            getData() {
-              return dataRef.current || {};
-            },
-          };
+              ),
+              scrollRef: scrollRefContext,
+              scrollShiftRef: scrollShiftRefContext,
+              pathRef: pathRef,
+              recalcInitial() {
+                this.initial = calculateHitbox(
+                  entry.target.getBoundingClientRect(),
+                  scrollRefContext.current,
+                  scrollShiftRefContext.current
+                );
+              },
+              getHitbox() {
+                return adjustHitboxMemoed(
+                  this.initial[0],
+                  this.initial[1],
+                  this.initial[2],
+                  this.initial[3],
+                  this.scrollRef.current,
+                  this.scrollShiftRef.current
+                );
+              },
+              getData() {
+                return dataRef.current || {};
+              },
+            };
 
-          hitboxManager.registerHitbox(id, entityRef.current);
-          parentContainer?.set(id, entityRef.current);
-          entityContainerRef.current?.forEach((entity, id) => {
-            hitboxManager.registerHitbox(id, entity);
-          });
-          resizeObserverContext.register(target);
-        } else if (!entry.isIntersecting) {
-          hitboxManager.unregisterHitbox(id);
-          parentContainer?.delete(id);
-          entityContainerRef.current?.forEach((_, id) => {
-            hitboxManager.unregisterHitbox(id);
-          });
-          resizeObserverContext.unregister(target);
+            eventContext.emit("registerHitbox", id, entityRef.current);
+            entityContainerRef.current?.forEach((entity, id) => {
+              eventContext.emit("registerHitbox", id, entity);
+            });
+            eventContext.emit("observeResize", target);
+            parentEntityContainer.current?.set(id, entityRef.current);
+          } else if (!entry.isIntersecting) {
+            eventContext.emit("unregisterHitbox", id);
+            entityContainerRef.current?.forEach((_, id) => {
+              eventContext.emit("unregisterHitbox", id);
+            });
+            eventContext.emit("unobserveResize", target);
+            parentEntityContainer.current?.delete(id);
+          }
         }
-      });
+      );
 
       return () => {
-        observerContext.unregister(target);
-        observerContext.unregisterObserverHandler(id);
-        hitboxManager.unregisterHitbox(id);
-        parentContainer?.delete(id);
-        resizeObserverContext.unregister(target);
+        intersectionObserverEventContext.emit("unobserveIntersection", target);
+        intersectionObserverEventContext.emit(
+          "unregisterIntersectionHandler",
+          id
+        );
+        eventContext.emit("unregisterHitbox", id);
+        eventContext.emit("unobserveResize", target);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        parentEntityContainer.current?.delete(id);
       };
     }
   }, [
-    isDragging,
     id,
+    intersectionObserverEventContext,
 
     // These don't actually change
+    eventContext,
     hitboxRef,
     hitboxManager,
-    observerContext,
     parentEntityContainer,
-    resizeObserverContext,
     scrollRefContext,
     scrollShiftRefContext,
     adjustHitboxMemoed,

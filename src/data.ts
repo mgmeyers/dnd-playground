@@ -13,6 +13,7 @@ function generateItems(n: number) {
     items.push({
       id: generateInstanceId(),
       type: "item",
+      accepts: ["item"],
       data: {
         title: l.generateSentences(1),
       },
@@ -31,6 +32,7 @@ function generateLanes(n: number) {
     lanes.push({
       id: generateInstanceId(),
       type: "lane",
+      accepts: ["lane"],
       data: {
         title: l.generateWords(3),
       },

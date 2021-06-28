@@ -5,6 +5,7 @@ export type Orientation = "horizontal" | "vertical";
 export interface NestableProps {
   id: string;
   type: string;
+  accepts: string[];
 }
 
 export interface Nestable<D = any, T = any> extends NestableProps {
@@ -37,9 +38,16 @@ export interface EntityPath {
   path: number[];
 }
 
+export interface EntityData {
+  type: string;
+  id: string;
+  accepts: string[];
+  [k: string]: any;
+}
+
 export interface Entity {
   getHitbox(): Hitbox;
-  getData(): Record<string, any>;
+  getData(): EntityData;
   recalcInitial(): void;
 
   initial: Hitbox;
