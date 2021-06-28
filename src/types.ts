@@ -47,6 +47,7 @@ export interface Entity {
   getPath(): Path;
   getHitbox(): Hitbox;
   getData(): EntityData;
+  getOrientation(): Orientation;
   recalcInitial(): void;
 
   scopeId: string;

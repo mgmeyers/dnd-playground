@@ -153,7 +153,7 @@ export function getScrollIntersection(
   target: Hitbox
 ): Array<[Entity, number]> {
   return entities.map((e) => {
-    const orientation = e.getData().orientation as Orientation;
+    const orientation = e.getOrientation();
     const side = e.getData().side as "before" | "after";
     const hitbox = e.getHitbox();
 
@@ -230,7 +230,6 @@ function centerOfRectangle(hitbox: Hitbox): Coordinates {
   };
 }
 
-
 /**
  * Returns the closest rectangle from an array of rectangles to the center of a given
  * rectangle.
@@ -247,12 +246,17 @@ export function closestCenter(entities: Entity[], target: Hitbox) {
 }
 
 export function getBestIntersect(hits: Entity[], dragHitbox: Hitbox) {
-  const centerRect = centerOfRectangle(dragHitbox);
-  const distances = hits.map((entity) => {
-    const center = centerOfRectangle(entity.getHitbox());
-    const modifier = centerRect.y > center.y ? 10000 : 0;
+  const dragTopLeft = cornersOfRectangle(dragHitbox)[0];
 
-    return distanceBetween(center, centerRect) + modifier;
+  const distances = hits.map((entity) => {
+    const entityHitbox = entity.getHitbox();
+    const entityTopLeft = cornersOfRectangle(entityHitbox)[0];
+    const entityCenter = centerOfRectangle(dragHitbox);
+    const axis = entity.getOrientation() === 'horizontal' ? 'x' : 'y';
+
+    const modifier = entityCenter[axis] > dragTopLeft[axis] ? 1000 : 0;
+
+    return distanceBetween(entityTopLeft, dragTopLeft) + modifier;
   });
 
   const minValueIndex = getMinValueIndex(distances);

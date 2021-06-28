@@ -26,7 +26,6 @@ import {
 import { getBestIntersect, getScrollIntersection } from "./helpers";
 import { getSiblingDirection, isNextSibling, SiblingDirection } from "./path";
 import { transitions } from "./animation";
-import { throttle } from "throttle-debounce";
 import { Unsubscribe } from "./emitter";
 
 export function DragStage() {
@@ -193,94 +192,94 @@ export function DragOverlay({ children }: DragOverlayProps) {
 
   React.useEffect(() => {
     let isDragging = false;
-    const handleIntersect = throttle(
-      50,
-      false,
-      (dragEntity: Entity, origin: Coordinates, position: Coordinates) => {
-        if (!isDragging) return;
+    const handleIntersect = (
+      dragEntity: Entity,
+      origin: Coordinates,
+      position: Coordinates
+    ) => {
+      if (!isDragging) return;
 
-        const hitboxes = hitboxManager.hitboxes.current;
+      const hitboxes = hitboxManager.hitboxes.current;
 
-        if (hitboxes) {
-          if (!initialDragHitboxRef.current) {
-            initialDragHitboxRef.current = dragEntity.getHitbox();
-          }
+      if (hitboxes) {
+        if (!initialDragHitboxRef.current) {
+          initialDragHitboxRef.current = dragEntity.getHitbox();
+        }
 
-          const entities = Array.from(hitboxes.values() || []);
-          const boxes = entities.map((e) => e.getHitbox());
-          const dragHitbox = adjustForMovement(
-            initialDragHitboxRef.current,
-            origin,
-            position
-          );
+        const entities = Array.from(hitboxes.values() || []);
+        const boxes = entities.map((e) => e.getHitbox());
+        const dragHitbox = adjustForMovement(
+          initialDragHitboxRef.current,
+          origin,
+          position
+        );
 
-          const hits: Entity[] = [];
-          const scrollHits: Entity[] = [];
+        const hits: Entity[] = [];
+        const scrollHits: Entity[] = [];
 
-          boxIntersect([dragHitbox], boxes).forEach((i) => {
-            const hit = entities[i[1]];
-            const data = hit.getData();
+        boxIntersect([dragHitbox], boxes).forEach((i) => {
+          const hit = entities[i[1]];
+          const data = hit.getData();
 
-            if (data.accepts.includes(dragEntity.getData().type)) {
-              if (data.type === "scrollContainer") {
-                scrollHits.push(hit);
-              } else {
-                hits.push(hit);
-              }
+          if (data.accepts.includes(dragEntity.getData().type)) {
+            if (data.type === "scrollContainer") {
+              scrollHits.push(hit);
+            } else {
+              hits.push(hit);
             }
-          });
-
-          const scrollIntersections = getScrollIntersection(
-            scrollHits,
-            dragHitbox
-          );
-
-          const { add, update, remove } = getScrollIntersectionDiff(
-            scrollIntersectionRef.current,
-            scrollIntersections
-          );
-
-          add.forEach((e) => {
-            eventContext.emit("beginScrollIntersect", dragEntity, ...e);
-          });
-
-          update.forEach((e) => {
-            eventContext.emit("updateScrollIntersect", dragEntity, ...e);
-          });
-
-          remove.forEach((e) => {
-            eventContext.emit("endScrollIntersect", dragEntity, ...e);
-          });
-
-          scrollIntersectionRef.current = scrollIntersections;
-
-          const primaryIntersection = getBestIntersect(hits, dragHitbox);
-          if (
-            primaryIntersectionRef.current &&
-            primaryIntersectionRef.current !== primaryIntersection
-          ) {
-            eventContext.emit(
-              "endDragIntersect",
-              dragEntity,
-              primaryIntersectionRef.current
-            );
-            primaryIntersectionRef.current = null;
           }
+        });
 
-          if (
-            primaryIntersection &&
-            primaryIntersectionRef.current !== primaryIntersection
-          ) {
-            eventContext.emit(
-              "beginDragIntersect",
-              dragEntity,
-              primaryIntersection
-            );
-            primaryIntersectionRef.current = primaryIntersection;
-          }
+        const scrollIntersections = getScrollIntersection(
+          scrollHits,
+          dragHitbox
+        );
+
+        const { add, update, remove } = getScrollIntersectionDiff(
+          scrollIntersectionRef.current,
+          scrollIntersections
+        );
+
+        add.forEach((e) => {
+          eventContext.emit("beginScrollIntersect", dragEntity, ...e);
+        });
+
+        update.forEach((e) => {
+          eventContext.emit("updateScrollIntersect", dragEntity, ...e);
+        });
+
+        remove.forEach((e) => {
+          eventContext.emit("endScrollIntersect", dragEntity, ...e);
+        });
+
+        scrollIntersectionRef.current = scrollIntersections;
+
+        const primaryIntersection = getBestIntersect(hits, dragHitbox);
+        if (
+          primaryIntersectionRef.current &&
+          primaryIntersectionRef.current !== primaryIntersection
+        ) {
+          eventContext.emit(
+            "endDragIntersect",
+            dragEntity,
+            primaryIntersectionRef.current
+          );
+          primaryIntersectionRef.current = null;
+        }
+
+        if (
+          primaryIntersection &&
+          primaryIntersectionRef.current !== primaryIntersection
+        ) {
+          eventContext.emit(
+            "beginDragIntersect",
+            dragEntity,
+            primaryIntersection
+          );
+          primaryIntersectionRef.current = primaryIntersection;
         }
       }
-    );
+    };
 
     const unsubscribers: Unsubscribe[] = [];
 

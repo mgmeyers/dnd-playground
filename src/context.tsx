@@ -317,6 +317,9 @@ export function ScrollContext({
         scrollRef: scrollRefContext,
         scrollShiftRef: scrollShiftRefContext,
         pathRef: beforePathRef,
+        getOrientation() {
+          return orientation;
+        },
         recalcInitial() {
           if (scrollRef.current) {
             this.initial = calculateScrollHitbox(
@@ -346,7 +349,6 @@ export function ScrollContext({
             id: beforeId,
             type: "scrollContainer",
             side: "before",
-            orientation,
             accepts: triggerTypeRef.current || [],
             scrollContainer: scrollRef.current,
           };
@@ -365,6 +367,9 @@ export function ScrollContext({
         scrollRef: scrollRefContext,
         scrollShiftRef: scrollShiftRefContext,
         pathRef: afterPathRef,
+        getOrientation() {
+          return orientation;
+        },
         recalcInitial() {
           if (scrollRef.current) {
             this.initial = calculateScrollHitbox(
@@ -394,7 +399,6 @@ export function ScrollContext({
             id: afterId,
             type: "scrollContainer",
             side: "after",
-            orientation,
             accepts: triggerTypeRef.current || [],
             scrollContainer: scrollRef.current,
           };
@@ -448,7 +452,7 @@ export function ScrollContext({
       const scroll = (direction: "before" | "after") => {
         frame = requestAnimationFrame(() => {
           if (!isScrolling) return;
-          
+
           scrollRef.current?.scrollBy({
             [orientation === "horizontal" ? "left" : "top"]:
               direction === "before"
@@ -648,6 +652,7 @@ export function HitboxContext({
   children,
   data,
 }: HitboxContextProps) {
+  const orientation = React.useContext(OrientationContext);
   const scopeId = React.useContext(ScopeIdContext);
   const eventContext = React.useContext(EventContext);
   const intersectionObserverEventContext = React.useContext(
@@ -696,6 +701,9 @@ export function HitboxContext({
               scrollRef: scrollRefContext,
               scrollShiftRef: scrollShiftRefContext,
               pathRef: pathRef,
+              getOrientation() {
+                return orientation;
+              },
               recalcInitial() {
                 this.initial = calculateHitbox(
                   entry.target.getBoundingClientRect(),
@@ -753,6 +761,7 @@ export function HitboxContext({
   }, [
     id,
     intersectionObserverEventContext,
+    orientation,
 
     // These don't actually change
     scopeId,
