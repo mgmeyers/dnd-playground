@@ -4,17 +4,20 @@ import { Hitbox, Entity } from "./types";
 
 interface HitBoxDebugProps {
   hitbox: Hitbox;
+  color: string;
+  zIndex: number;
 }
 
-function HitBoxDebug({ hitbox }: HitBoxDebugProps) {
+function HitBoxDebug({ color, hitbox, zIndex }: HitBoxDebugProps) {
   const style: React.CSSProperties = {
+    borderColor: color,
     transform: `translate3d(${hitbox[0]}px, ${hitbox[1]}px, 0px)`,
     width: hitbox[2] - hitbox[0],
     height: hitbox[3] - hitbox[1],
     position: "fixed",
     top: 0,
     left: 0,
-    zIndex: 10000,
+    zIndex: zIndex,
     pointerEvents: "none",
   };
 
@@ -41,7 +44,14 @@ export function DebugScrollContainers({
           return hb.getData().type === "scrollContainer";
         })
         .map(([id, hb]) => {
-          return <HitBoxDebug key={id} hitbox={hb.getHitbox()} />;
+          return (
+            <HitBoxDebug
+              zIndex={9999}
+              color="#8787d3"
+              key={id}
+              hitbox={hb.getHitbox()}
+            />
+          );
         })}
     </>
   );
@@ -63,8 +73,16 @@ export function Debug({
   return (
     <>
       {Array.from(hitboxes.current.entries()).map(([id, hb]) => {
-          return <HitBoxDebug key={id} hitbox={hb.getHitbox()} />;
-        })}
+        const isScroll = hb.getData().type === "scrollContainer";
+        return (
+          <HitBoxDebug
+            zIndex={isScroll ? 9999 : 8888}
+            color={isScroll ? "#8787d3" : "#058294"}
+            key={id}
+            hitbox={hb.getHitbox()}
+          />
+        );
+      })}
     </>
   );
 }
@@ -73,7 +91,14 @@ export function DebugIntersections({ hitboxes }: { hitboxes: Entity[] }) {
   return (
     <>
       {hitboxes.map((hb, i) => {
-        return <HitBoxDebug key={i} hitbox={hb.getHitbox()} />;
+        return (
+          <HitBoxDebug
+            zIndex={10000}
+            color="tomato"
+            key={i}
+            hitbox={hb.getHitbox()}
+          />
+        );
       })}
     </>
   );

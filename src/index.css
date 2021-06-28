@@ -63,7 +63,6 @@ body {
   overflow-x: hidden;
 }
 
-
 /* ------- */
 
 .board {
@@ -100,7 +99,6 @@ body {
   padding: 10px;
   margin-bottom: 10px;
 }
-
 
 .hitbox {
   border: 2px dashed tomato;

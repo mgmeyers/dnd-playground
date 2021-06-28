@@ -34,9 +34,7 @@ export interface Coordinates {
   x: number;
   y: number;
 }
-export interface EntityPath {
-  path: number[];
-}
+export type Path = number[];
 
 export interface EntityData {
   type: string;
@@ -46,12 +44,14 @@ export interface EntityData {
 }
 
 export interface Entity {
+  getPath(): Path;
   getHitbox(): Hitbox;
   getData(): EntityData;
   recalcInitial(): void;
 
+  scopeId: string;
   initial: Hitbox;
-  pathRef: React.MutableRefObject<EntityPath>;
+  pathRef: React.MutableRefObject<{ path: Path }>;
   scrollRef: React.MutableRefObject<ScrollMotionValues | null>;
   scrollShiftRef: React.RefObject<ScrollShift>;
 }
