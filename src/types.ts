@@ -1,5 +1,3 @@
-import { ScrollMotionValues } from "framer-motion";
-
 export type Orientation = "horizontal" | "vertical";
 
 export interface NestableProps {
@@ -26,9 +24,16 @@ export type Lane = Nestable<LaneData, Item>;
 
 //Interpretation: [minX, minY, maxX, maxY]
 export type Hitbox = [number, number, number, number];
-export interface ScrollShift {
+export interface CoordinateShift {
   x: number;
   y: number;
+}
+
+export interface ScrollOffset {
+  x: number;
+  y: number;
+  xPct: number;
+  yPct: number;
 }
 export interface Coordinates {
   x: number;
@@ -53,8 +58,8 @@ export interface Entity {
   scopeId: string;
   initial: Hitbox;
   pathRef: React.MutableRefObject<{ path: Path }>;
-  scrollRef: React.MutableRefObject<ScrollMotionValues | null>;
-  scrollShiftRef: React.RefObject<ScrollShift>;
+  scrollRef: React.RefObject<ScrollOffset>;
+  scrollShiftRef: React.RefObject<CoordinateShift>;
 }
 
 export interface WithChildren {

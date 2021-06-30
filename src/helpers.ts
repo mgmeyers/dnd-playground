@@ -1,5 +1,11 @@
-import { ScrollMotionValues } from "framer-motion";
-import { Coordinates, Entity, Hitbox, Orientation, ScrollShift } from "./types";
+import {
+  Coordinates,
+  Entity,
+  Hitbox,
+  Orientation,
+  CoordinateShift,
+  ScrollOffset,
+} from "./types";
 
 export function numberOrZero(n?: number) {
   return n === undefined ? 0 : n;
@@ -9,59 +15,64 @@ export function noop() {}
 
 export function calculateHitbox(
   rect: DOMRectReadOnly,
-  scroll: ScrollMotionValues | null,
-  scrollShift: ScrollShift | null
+  scroll: ScrollOffset | null,
+  scrollShift: CoordinateShift | null,
+  manualShift: CoordinateShift | null
 ): Hitbox {
   return [
     // minx
     rect.left +
-      numberOrZero(scroll?.scrollX.get()) +
-      numberOrZero(scrollShift?.x),
+      numberOrZero(scroll?.x) +
+      numberOrZero(scrollShift?.x) -
+      numberOrZero(manualShift?.x),
     // miny
     rect.top +
-      numberOrZero(scroll?.scrollY.get()) +
-      numberOrZero(scrollShift?.y),
+      numberOrZero(scroll?.y) +
+      numberOrZero(scrollShift?.y) -
+      numberOrZero(manualShift?.y),
 
     // maxx
     rect.left +
       rect.width +
-      numberOrZero(scroll?.scrollX.get()) +
-      numberOrZero(scrollShift?.x),
+      numberOrZero(scroll?.x) +
+      numberOrZero(scrollShift?.x) -
+      numberOrZero(manualShift?.x),
     // maxy
     rect.top +
       rect.height +
-      numberOrZero(scroll?.scrollY.get()) +
-      numberOrZero(scrollShift?.y),
+      numberOrZero(scroll?.y) +
+      numberOrZero(scrollShift?.y) -
+      numberOrZero(manualShift?.y),
   ];
 }
 
 export function calculateScrollHitbox(
   rect: DOMRectReadOnly,
-  scroll: ScrollMotionValues | null,
-  scrollShift: ScrollShift | null,
+  scroll: ScrollOffset | null,
+  scrollShift: CoordinateShift | null,
   orientation: Orientation,
   side: "before" | "after"
 ): Hitbox {
-  const hitbox = calculateHitbox(rect, scroll, scrollShift);
+  const hitbox = calculateHitbox(rect, scroll, scrollShift, null);
 
   if (orientation === "horizontal" && side === "before") {
-    hitbox[2] = hitbox[0] + Math.min(30, Math.round(rect.width * 0.2));
+    hitbox[2] = hitbox[0] + 35;
     return hitbox;
   }
 
   if (orientation === "horizontal" && side === "after") {
     hitbox[0] =
-      hitbox[0] + rect.width - Math.min(30, Math.round(rect.width * 0.2));
+      hitbox[0] + rect.width - 35;
     return hitbox;
   }
 
   if (orientation === "vertical" && side === "before") {
-    hitbox[3] = hitbox[1] + Math.min(30, Math.round(rect.height * 0.2));
+    hitbox[3] = hitbox[1] + 35;
     return hitbox;
   }
 
   hitbox[1] =
-    hitbox[1] + rect.height - Math.min(30, Math.round(rect.height * 0.2));
+    hitbox[1] + rect.height - 35;
 
   return hitbox;
 }
@@ -71,14 +82,14 @@ export function adjustHitbox(
   minY: number,
   maxX: number,
   maxY: number,
-  scroll: ScrollMotionValues | null,
-  scrollShift: ScrollShift | null
+  scroll: ScrollOffset | null,
+  scrollShift: CoordinateShift | null
 ): Hitbox {
   return [
-    minX - numberOrZero(scroll?.scrollX.get()) - numberOrZero(scrollShift?.x),
-    minY - numberOrZero(scroll?.scrollY.get()) - numberOrZero(scrollShift?.y),
-    maxX - numberOrZero(scroll?.scrollX.get()) - numberOrZero(scrollShift?.x),
-    maxY - numberOrZero(scroll?.scrollY.get()) - numberOrZero(scrollShift?.y),
+    minX - numberOrZero(scroll?.x) - numberOrZero(scrollShift?.x),
+    minY - numberOrZero(scroll?.y) - numberOrZero(scrollShift?.y),
+    maxX - numberOrZero(scroll?.x) - numberOrZero(scrollShift?.x),
+    maxY - numberOrZero(scroll?.y) - numberOrZero(scrollShift?.y),
   ];
 }
 
@@ -252,7 +263,7 @@ export function getBestIntersect(hits: Entity[], dragHitbox: Hitbox) {
     const entityHitbox = entity.getHitbox();
     const entityTopLeft = cornersOfRectangle(entityHitbox)[0];
     const entityCenter = centerOfRectangle(dragHitbox);
-    const axis = entity.getOrientation() === 'horizontal' ? 'x' : 'y';
+    const axis = entity.getOrientation() === "horizontal" ? "x" : "y";
 
     const modifier = entityCenter[axis] > dragTopLeft[axis] ? 1000 : 0;
 
@@ -262,4 +273,29 @@ export function getBestIntersect(hits: Entity[], dragHitbox: Hitbox) {
   const minValueIndex = getMinValueIndex(distances);
 
   return hits[minValueIndex] ? hits[minValueIndex] : null;
+}
+
+export function getElementScrollOffsets(element: HTMLElement): ScrollOffset {
+  const {
+    scrollLeft,
+    scrollTop,
+    scrollWidth,
+    scrollHeight,
+    offsetWidth,
+    offsetHeight,
+  } = element;
+
+  const x = scrollLeft;
+  const y = scrollTop;
+  const maxX = scrollWidth - offsetWidth;
+  const maxY = scrollHeight - offsetHeight;
+  const xPct = !x || !maxX ? 0 : x / maxX;
+  const yPct = !y || !maxY ? 0 : y / maxY;
+
+  return {
+    x,
+    y,
+    xPct,
+    yPct,
+  };
 }

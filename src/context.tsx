@@ -1,10 +1,10 @@
-import { ScrollMotionValues, useElementScroll } from "framer-motion";
 import React from "react";
 import { generateInstanceId } from "./data";
 import {
   adjustHitbox,
   calculateHitbox,
   calculateScrollHitbox,
+  getElementScrollOffsets,
   numberOrZero,
 } from "./helpers";
 import {
@@ -13,10 +13,13 @@ import {
   EntityData,
   Orientation,
   Path,
-  ScrollShift,
+  CoordinateShift,
   WithChildren,
+  ScrollOffset,
 } from "./types";
 import { createEmitter, Emitter, Unsubscribe } from "./emitter";
+// import { Debug } from "./Debug";
+import rafSchd from "raf-schd";
 
 export type IntersectionObserverHandler = (
   entry: IntersectionObserverEntry
@@ -68,6 +71,8 @@ interface GlobalEvents {
     intersectingEntity: Entity,
     ratio: number
   ): void;
+
+  shiftEntity(id: string, shift: CoordinateShift): void;
 }
 
 interface IntersectionObserverEvents {
@@ -99,12 +104,12 @@ export const HitboxManagerContext = React.createContext<HitboxManager>({
   },
 });
 
-export const ScrollMotionContext = React.createContext<
-  React.MutableRefObject<ScrollMotionValues | null>
+export const ScrollOffsetContext = React.createContext<
+  React.RefObject<ScrollOffset>
 >(React.createRef());
 
 export const ScrollShiftContext = React.createContext<
-  React.RefObject<ScrollShift>
+  React.RefObject<CoordinateShift>
 >(React.createRef());
 
 export const OrientationContext =
@@ -276,14 +281,39 @@ export function ScrollContext({
   const eventContext = React.useContext(EventContext);
   const parentEntityContainer = React.useContext(EntityContainerContext);
   const hitboxManager = React.useContext(HitboxManagerContext);
-  const scrollRefContext = React.useContext(ScrollMotionContext);
+  const scrollRefContext = React.useContext(ScrollOffsetContext);
   const scrollShiftRefContext = React.useContext(ScrollShiftContext);
-  const scrollValues = useElementScroll(scrollRef);
-  const scrollMotionRef = React.useRef<ScrollMotionValues | null>(scrollValues);
+  const scrollOffsetRef = React.useRef<ScrollOffset>({
+    x: 0,
+    y: 0,
+    xPct: 0,
+    yPct: 0,
+  });
   const parentScrollPathContainer = React.useContext(ScrollPathContext);
   const adjustHitboxMemoed = React.useCallback(adjustHitbox, []);
   const triggerTypeRef = React.useRef(triggerTypes);
   const [observerReady, setObserverReady] = React.useState(false);
+
+  React.useEffect(() => {
+    const scrollEl = scrollRef.current;
+
+    if (!scrollEl) return;
+
+    const onScroll = rafSchd(() => {
+      scrollOffsetRef.current = getElementScrollOffsets(scrollEl);
+    });
+
+    scrollEl?.addEventListener("scroll", onScroll, {
+      passive: true,
+      capture: false,
+    });
+
+    onScroll();
+
+    return () => {
+      scrollEl?.removeEventListener("scroll", onScroll);
+    };
+  }, [scrollRef]);
 
   const beforePathRef = React.useRef<{ path: Path }>({
     get path() {
@@ -372,6 +402,9 @@ export function ScrollContext({
         },
         recalcInitial() {
           if (scrollRef.current) {
+            scrollOffsetRef.current = getElementScrollOffsets(
+              scrollRef.current
+            );
             this.initial = calculateScrollHitbox(
               scrollRef.current.getBoundingClientRect(),
               scrollRefContext.current,
@@ -405,59 +438,47 @@ export function ScrollContext({
         },
       };
 
-      const scrollProgress =
-        orientation === "horizontal"
-          ? scrollValues.scrollXProgress
-          : scrollValues.scrollYProgress;
-
-      const updateHitboxes = () => {
-        if (
-          scrollProgress.get() > 0 &&
-          !hitboxManager.hitboxes.current?.has(beforeId)
-        ) {
-          eventContext.emit("registerHitbox", beforeId, beforeHitbox);
-          parentContainer?.set(beforeId, beforeHitbox);
-        } else if (
-          scrollProgress.get() === 0 &&
-          hitboxManager.hitboxes.current?.has(beforeId)
-        ) {
-          eventContext.emit("unregisterHitbox", beforeId);
-          parentContainer?.delete(beforeId);
-        }
-
-        if (
-          scrollProgress.get() < 1 &&
-          !hitboxManager.hitboxes.current?.has(afterId)
-        ) {
-          eventContext.emit("registerHitbox", afterId, afterHitbox);
-          parentContainer?.set(afterId, afterHitbox);
-        } else if (
-          scrollProgress.get() === 1 &&
-          hitboxManager.hitboxes.current?.has(afterId)
-        ) {
-          eventContext.emit("unregisterHitbox", afterId);
-          parentContainer?.delete(afterId);
-        }
-      };
-
-      const cancel = scrollProgress.onChange(updateHitboxes);
-
-      updateHitboxes();
+      eventContext.emit("registerHitbox", beforeId, beforeHitbox);
+      parentContainer?.set(beforeId, beforeHitbox);
+      eventContext.emit("registerHitbox", afterId, afterHitbox);
+      parentContainer?.set(afterId, afterHitbox);
 
       let dragEntity: Entity | null = null;
       let isScrolling = false;
       let scrollStrength = 0;
       let frame = 0;
 
+      const scrollPctKey = orientation === "horizontal" ? "xPct" : "yPct";
+
+      const isDoneScrolling = (direction: "before" | "after") => {
+        if (
+          direction === "after" &&
+          scrollOffsetRef.current[scrollPctKey] === 1
+        ) {
+          return true;
+        }
+
+        if (
+          direction === "before" &&
+          scrollOffsetRef.current[scrollPctKey] === 0
+        ) {
+          return true;
+        }
+
+        return false;
+      };
+
       const scroll = (direction: "before" | "after") => {
+        if (isDoneScrolling(direction)) return;
+
         frame = requestAnimationFrame(() => {
-          if (!isScrolling) return;
+          if (!isScrolling && isDoneScrolling(direction)) return;
 
           scrollRef.current?.scrollBy({
             [orientation === "horizontal" ? "left" : "top"]:
               direction === "before"
-                ? Math.min(-13 + (13 * scrollStrength) / 30, 0)
-                : Math.max(13 - (13 * scrollStrength) / 30, 0),
+                ? Math.min(-13 + (13 * scrollStrength) / 35, 0)
+                : Math.max(13 - (13 * scrollStrength) / 35, 0),
           });
 
           if (dragEntity) {
@@ -526,14 +547,11 @@ export function ScrollContext({
         }
 
         unsubscribers.forEach((fn) => fn());
-
-        cancel();
       };
     }
   }, [
     observerReady,
     orientation,
-    scrollValues,
     scrollId,
 
     //
@@ -547,16 +565,16 @@ export function ScrollContext({
     scrollShiftRefContext,
   ]);
 
-  const scrollShiftRef = React.useRef<ScrollShift>({
+  const scrollShiftRef = React.useRef<CoordinateShift>({
     get x() {
       return (
-        numberOrZero(scrollRefContext.current?.scrollX.get()) +
+        numberOrZero(scrollRefContext.current?.x) +
         numberOrZero(scrollShiftRefContext.current?.x)
       );
     },
     get y() {
       return (
-        numberOrZero(scrollRefContext.current?.scrollY.get()) +
+        numberOrZero(scrollRefContext.current?.y) +
         numberOrZero(scrollShiftRefContext.current?.y)
       );
     },
@@ -582,7 +600,7 @@ export function ScrollContext({
         },
         {
           root: scrollRef.current,
-          threshold: 0.25,
+          threshold: 0.1,
         }
       );
 
@@ -627,11 +645,11 @@ export function ScrollContext({
         value={observerReady ? emitter : null}
       >
         <ScrollShiftContext.Provider value={scrollShiftRef}>
-          <ScrollMotionContext.Provider value={scrollMotionRef}>
+          <ScrollOffsetContext.Provider value={scrollOffsetRef}>
             <ScrollPathContext.Provider value={beforePathRef}>
               {children}
             </ScrollPathContext.Provider>
-          </ScrollMotionContext.Provider>
+          </ScrollOffsetContext.Provider>
         </ScrollShiftContext.Provider>
       </IntersectionObserverEventContext.Provider>
     </OrientationContext.Provider>
@@ -661,7 +679,7 @@ export function HitboxContext({
   const parentEntityContainer = React.useContext(EntityContainerContext);
   const parentPathContainer = React.useContext(EntityPathContext);
   const hitboxManager = React.useContext(HitboxManagerContext);
-  const scrollRefContext = React.useContext(ScrollMotionContext);
+  const scrollRefContext = React.useContext(ScrollOffsetContext);
   const scrollShiftRefContext = React.useContext(ScrollShiftContext);
 
   const pathRef = React.useRef<{ path: Path }>({
@@ -683,6 +701,9 @@ export function HitboxContext({
     if (intersectionObserverEventContext && hitboxRef.current) {
       const target = hitboxRef.current;
 
+      let shift: CoordinateShift = { x: 0, y: 0 };
+      let shiftUnsubscribe: Unsubscribe | null = null;
+
       target.dataset.hitboxid = id;
 
       intersectionObserverEventContext.emit("observeIntersection", target);
@@ -696,7 +717,8 @@ export function HitboxContext({
               initial: calculateHitbox(
                 entry.boundingClientRect,
                 scrollRefContext.current,
-                scrollShiftRefContext.current
+                scrollShiftRefContext.current,
+                shift
               ),
               scrollRef: scrollRefContext,
               scrollShiftRef: scrollShiftRefContext,
@@ -708,7 +730,8 @@ export function HitboxContext({
                 this.initial = calculateHitbox(
                   entry.target.getBoundingClientRect(),
                   scrollRefContext.current,
-                  scrollShiftRefContext.current
+                  scrollShiftRefContext.current,
+                  shift
                 );
               },
               getHitbox() {
@@ -728,20 +751,31 @@ export function HitboxContext({
                 return dataRef.current || {};
               },
             };
-
+            shiftUnsubscribe = eventContext.on(
+              "shiftEntity",
+              (entityId, entityShift) => {
+                if (entityId === id) {
+                  shift = entityShift;
+                  entity.recalcInitial();
+                }
+              }
+            );
             eventContext.emit("registerHitbox", id, entity);
             entityContainerRef.current?.forEach((entity, id) => {
               eventContext.emit("registerHitbox", id, entity);
             });
-            eventContext.emit("observeResize", target);
             parentEntityContainer.current?.set(id, entity);
+            eventContext.emit("observeResize", target);
           } else if (!entry.isIntersecting) {
             eventContext.emit("unregisterHitbox", id);
             entityContainerRef.current?.forEach((_, id) => {
               eventContext.emit("unregisterHitbox", id);
             });
-            eventContext.emit("unobserveResize", target);
             parentEntityContainer.current?.delete(id);
+            eventContext.emit("unobserveResize", target);
+            if (shiftUnsubscribe) {
+              shiftUnsubscribe();
+            }
           }
         }
       );
