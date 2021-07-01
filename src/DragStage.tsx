@@ -11,7 +11,6 @@ import {
 } from "./types";
 import rafSchd from "raf-schd";
 import boxIntersect from "box-intersect";
-
 import {
   RootContext,
   ScrollContext,
@@ -23,15 +22,14 @@ import {
   ScopeIdContext,
   Scope,
 } from "./context";
-import { getBestIntersect, getScrollIntersection } from "./helpers";
 import {
-  areSiblings,
-  getSiblingDirection,
-  isNextSibling,
-  SiblingDirection,
-} from "./path";
+  getBestIntersect,
+  getScrollIntersection,
+} from "./helpers";
+import { areSiblings, getSiblingDirection, SiblingDirection } from "./path";
 import { timings, transitions } from "./animation";
 import { Unsubscribe } from "./emitter";
+import { debounce } from "throttle-debounce";
 
 export function DragStage() {
   return (
@@ -202,6 +200,7 @@ export function DragOverlay({ children }: DragOverlayProps) {
 
   React.useEffect(() => {
     let isDragging = false;
+
     const handleIntersect = (
       dragEntity: Entity,
       origin: Coordinates,
@@ -411,7 +410,6 @@ export function HitboxComponent({
   index,
   data,
 }: HitboxProps) {
-  const [isDragging, setIsDragging] = React.useState(false);
   const hitboxManager = React.useContext(HitboxManagerContext);
   const eventContext = React.useContext(EventContext);
   const parentPath = React.useContext(EntityPathContext);
@@ -430,17 +428,76 @@ export function HitboxComponent({
   styleRef.current = style;
 
   React.useEffect(() => {
-    let debounce = 0;
-    let shiftDebounce = 0;
+    const shift = debounce(
+      timings.outOfTheWay * 1000,
+      (id: string, x: number, y: number) => {
+        eventContext.emit("shiftEntity", id, {
+          x,
+          y,
+        });
+      }
+    );
+
+    const onEndDragIntersect = debounce(100, () => {
+      if (styleRef.current !== initial) {
+        setStyle(initial);
+        shift(id, 0, 0);
+      }
+    });
+
+    let dragHitboxAdjustments: Hitbox = [0, 0, 0, 0];
+
     const unsubscribe = [
+      eventContext.on(
+        "dragStart",
+        (dragEntity, origin, position, adjustments) => {
+          dragHitboxAdjustments = adjustments;
+          if (!pathRef.current) return;
+
+          const direction = getSiblingDirection(
+            dragEntity.getPath(),
+            pathRef.current
+          );
+
+          if (direction === SiblingDirection.Self) {
+          }
+
+          if (direction === SiblingDirection.After) {
+            const hitbox = dragEntity.initial;
+            const height =
+              hitbox[3] +
+              dragHitboxAdjustments[3] -
+              hitbox[1] -
+              dragHitboxAdjustments[1];
+            const width =
+              hitbox[2] +
+              dragHitboxAdjustments[2] -
+              hitbox[0] -
+              dragHitboxAdjustments[0];
+            const isHorizontal = orientation === "horizontal";
+
+            setStyle({
+              transition: transitions.none,
+              transform: isHorizontal
+                ? `translate3d(${width}px, 0, 0)`
+                : `translate3d(0, ${height}px, 0)`,
+            });
+
+            eventContext.emit("shiftEntity", id, {
+              x: isHorizontal ? width : 0,
+              y: isHorizontal ? 0 : height,
+            });
+          }
+        }
+      ),
       eventContext.on(
         "beginDragIntersect",
         (dragEntity, intersectingEntity) => {
           const intersectionPath = intersectingEntity.getPath();
 
           if (
-            dragEntity === intersectingEntity ||
-            isNextSibling(dragEntity.getPath(), intersectionPath)
+            dragEntity.getData().id === id ||
+            dragEntity === intersectingEntity
           ) {
             return;
           }
@@ -459,14 +516,23 @@ export function HitboxComponent({
             pathRef.current
           );
 
-          clearTimeout(debounce);
+          onEndDragIntersect.cancel();
+
           if (
             direction === SiblingDirection.Self ||
             direction === SiblingDirection.After
           ) {
             const hitbox = dragEntity.initial;
-            const height = hitbox[3] - hitbox[1];
-            const width = hitbox[2] - hitbox[0];
+            const height =
+              hitbox[3] +
+              dragHitboxAdjustments[3] -
+              hitbox[1] -
+              dragHitboxAdjustments[1];
+            const width =
+              hitbox[2] +
+              dragHitboxAdjustments[2] -
+              hitbox[0] -
+              dragHitboxAdjustments[0];
             const isHorizontal = orientation === "horizontal";
 
             setStyle({
@@ -475,57 +541,25 @@ export function HitboxComponent({
                 ? `translate3d(${width}px, 0, 0)`
                 : `translate3d(0, ${height}px, 0)`,
             });
-            clearTimeout(shiftDebounce);
-            shiftDebounce = window.setTimeout(() => {
-              eventContext.emit("shiftEntity", id, {
-                x: isHorizontal ? width : 0,
-                y: isHorizontal ? 0 : height,
-              });
-            }, timings.outOfTheWay * 1000);
+            shift(id, isHorizontal ? width : 0, isHorizontal ? 0 : height);
           } else if (styleRef.current !== initial) {
             setStyle(initial);
-            clearTimeout(shiftDebounce);
-            shiftDebounce = window.setTimeout(() => {
-              eventContext.emit("shiftEntity", id, {
-                x: 0,
-                y: 0,
-              });
-            }, timings.outOfTheWay * 1000);
+            shift(id, 0, 0);
           }
         }
       ),
-      eventContext.on("endDragIntersect", () => {
-        clearTimeout(debounce);
-        debounce = window.setTimeout(() => {
-          if (styleRef.current !== initial) {
-            setStyle(initial);
-            clearTimeout(shiftDebounce);
-            shiftDebounce = window.setTimeout(() => {
-              eventContext.emit("shiftEntity", id, {
-                x: 0,
-                y: 0,
-              });
-            }, timings.outOfTheWay * 1000);
-          }
-        }, 100);
-      }),
+      eventContext.on("endDragIntersect", onEndDragIntersect),
       eventContext.on("dragEnd", () => {
-        clearTimeout(debounce);
+        onEndDragIntersect.cancel();
         if (styleRef.current !== initial) {
           setStyle(initial);
-          clearTimeout(shiftDebounce);
-          shiftDebounce = window.setTimeout(() => {
-            eventContext.emit("shiftEntity", id, {
-              x: 0,
-              y: 0,
-            });
-          }, timings.outOfTheWay * 1000);
+          shift(id, 0, 0);
         }
       }),
     ];
 
     return () => {
-      clearTimeout(debounce);
+      onEndDragIntersect.cancel();
       eventContext.emit("shiftEntity", id, {
         x: 0,
         y: 0,
@@ -538,10 +572,11 @@ export function HitboxComponent({
     (e) => {
       e.stopPropagation();
       e.preventDefault();
+
       eventContext.emit("dragStartInternal", e.nativeEvent, id);
 
+      setStyle({ display: "none" });
       let _isDragging = true;
-      setIsDragging(true);
 
       const onMove = rafSchd((e: PointerEvent) => {
         if (_isDragging) {
@@ -551,7 +586,7 @@ export function HitboxComponent({
 
       const onEnd = (e: PointerEvent) => {
         _isDragging = false;
-        setIsDragging(false);
+        setStyle(initial);
         eventContext.emit("dragEndInternal", e, id);
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onEnd);
@@ -565,15 +600,10 @@ export function HitboxComponent({
     [eventContext, id]
   );
 
-  const s = {
-    ...style,
-    opacity: isDragging ? 0.6 : 1,
-  };
-
   return (
     <HitboxContext data={data} hitboxRef={hitboxRef} id={id} index={index}>
       <div
-        style={s}
+        style={style}
         ref={hitboxRef}
         className={classcat([className, "box"])}
         onPointerDown={onPointerDown}
@@ -617,14 +647,19 @@ export function Placeholder({ index, accepts }: PlaceholderProps) {
   }, [id, accepts]);
 
   React.useEffect(() => {
-    let debounce = 0;
+    const onEndDragIntersect = debounce(100, () => {
+      if (styleRef.current !== initialPlaceholder) {
+        setStyle(initialPlaceholder);
+      }
+    });
+
     const unsubscribe = [
       eventContext.on(
         "beginDragIntersect",
         (dragEntity, intersectingEntity) => {
           const intersectionPath = intersectingEntity.getPath();
 
-          clearTimeout(debounce);
+          onEndDragIntersect.cancel();
           if (
             pathRef.current &&
             (areSiblings(intersectionPath, pathRef.current) ||
@@ -643,15 +678,9 @@ export function Placeholder({ index, accepts }: PlaceholderProps) {
           }
         }
       ),
-      eventContext.on("endDragIntersect", () => {
-        clearTimeout(debounce);
-        debounce = window.setTimeout(() => {
-          if (styleRef.current !== initialPlaceholder) {
-            setStyle(initialPlaceholder);
-          }
-        }, 100);
-      }),
+      eventContext.on("endDragIntersect", onEndDragIntersect),
       eventContext.on("dragEnd", () => {
+        onEndDragIntersect.cancel();
         if (styleRef.current !== initialPlaceholder) {
           setStyle(initialPlaceholder);
         }

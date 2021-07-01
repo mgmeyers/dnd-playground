@@ -16,6 +16,7 @@ import {
   CoordinateShift,
   WithChildren,
   ScrollOffset,
+  Hitbox,
 } from "./types";
 import { createEmitter, Emitter, Unsubscribe } from "./emitter";
 // import { Debug } from "./Debug";
@@ -39,17 +40,20 @@ interface GlobalEvents {
   dragStart(
     dragEntity: Entity,
     origin: Coordinates,
-    position: Coordinates
+    position: Coordinates,
+    dragHitboxAdjustments: Hitbox
   ): void;
   dragMove(
     dragEntity: Entity,
     origin: Coordinates,
-    position: Coordinates
+    position: Coordinates,
+    dragHitboxAdjustments: Hitbox
   ): void;
   dragEnd(
     dragEntity: Entity,
     origin: Coordinates,
     position: Coordinates,
+    dragHitboxAdjustments: Hitbox,
     dropTarget: Entity | null
   ): void;
 
@@ -159,6 +163,7 @@ export function RootContext({ children }: WithChildren) {
     let dragOrigin: Coordinates | undefined;
     let dragPosition: Coordinates | undefined;
     let dragEntity: Entity | undefined;
+    let dragHitboxAdjustments: Hitbox = [0, 0, 0, 0];
 
     const unsubscribers: Unsubscribe[] = [
       emitter.on("registerHitbox", (id, entity) => {
@@ -174,8 +179,23 @@ export function RootContext({ children }: WithChildren) {
         dragPosition = { x: e.screenX, y: e.screenY };
         dragEntity = hitboxManager.getEntity(id);
 
+        const styles = getComputedStyle(e.target as HTMLElement);
+
+        dragHitboxAdjustments = [
+          parseFloat(styles.marginRight) || 0,
+          parseFloat(styles.marginTop) || 0,
+          parseFloat(styles.marginLeft) || 0,
+          parseFloat(styles.marginBottom) || 0,
+        ];
+
         if (dragEntity) {
-          emitter.emit("dragStart", dragEntity, dragOrigin, dragPosition);
+          emitter.emit(
+            "dragStart",
+            dragEntity,
+            dragOrigin,
+            dragPosition,
+            dragHitboxAdjustments
+          );
         }
       }),
 
@@ -187,14 +207,21 @@ export function RootContext({ children }: WithChildren) {
             "dragMove",
             dragEntity,
             dragOrigin || { x: e.screenX, y: e.screenY },
-            dragPosition
+            dragPosition,
+            dragHitboxAdjustments
           );
         }
       }),
 
       emitter.on("dragScrollInternal", (dragEntity) => {
         if (dragOrigin && dragPosition) {
-          emitter.emit("dragMove", dragEntity, dragOrigin, dragPosition);
+          emitter.emit(
+            "dragMove",
+            dragEntity,
+            dragOrigin,
+            dragPosition,
+            dragHitboxAdjustments
+          );
         }
       }),
 
@@ -205,6 +232,7 @@ export function RootContext({ children }: WithChildren) {
             dragEntity,
             dragOrigin || { x: e.screenX, y: e.screenY },
             { x: e.screenX, y: e.screenY },
+            dragHitboxAdjustments,
             null
           );
         }
@@ -212,6 +240,7 @@ export function RootContext({ children }: WithChildren) {
         dragOrigin = undefined;
         dragPosition = undefined;
         dragEntity = undefined;
+        dragHitboxAdjustments = [0, 0, 0, 0];
       }),
     ];
 

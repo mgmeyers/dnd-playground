@@ -27,6 +27,7 @@ const outOfTheWayTiming: string = `${timings.outOfTheWay}s ${curves.outOfTheWay}
 export const placeholderTransitionDelayTime: number = 0.1;
 
 export const transitions = {
+  none: `none`,
   fluid: `opacity ${outOfTheWayTiming}`,
   snap: `transform ${outOfTheWayTiming}, opacity ${outOfTheWayTiming}`,
   drop: (duration: number): string => {
