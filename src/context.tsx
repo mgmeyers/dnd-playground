@@ -15,7 +15,7 @@ import {
   Path,
   CoordinateShift,
   WithChildren,
-  ScrollOffset,
+  ScrollState,
   Hitbox,
 } from "./types";
 import { createEmitter, Emitter, Unsubscribe } from "./emitter";
@@ -109,7 +109,7 @@ export const HitboxManagerContext = React.createContext<HitboxManager>({
 });
 
 export const ScrollOffsetContext = React.createContext<
-  React.RefObject<ScrollOffset>
+  React.RefObject<ScrollState>
 >(React.createRef());
 
 export const ScrollShiftContext = React.createContext<
@@ -312,7 +312,7 @@ export function ScrollContext({
   const hitboxManager = React.useContext(HitboxManagerContext);
   const scrollRefContext = React.useContext(ScrollOffsetContext);
   const scrollShiftRefContext = React.useContext(ScrollShiftContext);
-  const scrollOffsetRef = React.useRef<ScrollOffset>({
+  const scrollOffsetRef = React.useRef<ScrollState>({
     x: 0,
     y: 0,
     xPct: 0,
@@ -501,7 +501,7 @@ export function ScrollContext({
         if (isDoneScrolling(direction)) return;
 
         frame = requestAnimationFrame(() => {
-          if (!isScrolling && isDoneScrolling(direction)) return;
+          if (!isScrolling || isDoneScrolling(direction)) return;
 
           scrollRef.current?.scrollBy({
             [orientation === "horizontal" ? "left" : "top"]:
@@ -520,9 +520,7 @@ export function ScrollContext({
 
       const unsubscribers: Unsubscribe[] = [
         eventContext.on("dragEnd", () => {
-          if (isScrolling) {
-            isScrolling = false;
-          }
+          isScrolling = false;
         }),
 
         eventContext.on(

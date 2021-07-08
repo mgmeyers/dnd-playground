@@ -22,12 +22,9 @@ import {
   ScopeIdContext,
   Scope,
 } from "./context";
-import {
-  getBestIntersect,
-  getScrollIntersection,
-} from "./helpers";
+import { getBestIntersect, getScrollIntersection } from "./helpers";
 import { areSiblings, getSiblingDirection, SiblingDirection } from "./path";
-import { timings, transitions } from "./animation";
+import { getDropDuration, timings, transforms, transitions } from "./animation";
 import { Unsubscribe } from "./emitter";
 import { debounce } from "throttle-debounce";
 
@@ -175,6 +172,7 @@ export function DragOverlay({ children }: DragOverlayProps) {
   const [entity, setEntity] = React.useState<Entity>();
   const [origin, setOrigin] = React.useState<Coordinates>();
   const [position, setPosition] = React.useState<Coordinates>();
+  const [dropStyles, setDropStyles] = React.useState<React.CSSProperties>({});
 
   const entityRef = React.useRef(entity);
   const originRef = React.useRef(origin);
@@ -324,8 +322,44 @@ export function DragOverlay({ children }: DragOverlayProps) {
     unsubscribers.push(eventContext.on("dragMove", move));
     unsubscribers.push(
       eventContext.on("dragEnd", () => {
+        const position = positionRef.current;
+        const intersection = primaryIntersectionRef.current;
+
+        if (position && intersection) {
+          const dropHitbox = intersection.getHitbox();
+          const dropDestination = {
+            x: dropHitbox[0],
+            y: dropHitbox[1],
+          };
+          const dropDuration = getDropDuration({
+            position: position,
+            destination: dropDestination,
+          });
+
+          const transition = transitions.drop(dropDuration);
+          const transform = transforms.drop(dropDestination);
+
+          setDropStyles({
+            transition,
+            transform,
+          });
+
+          setTimeout(() => {
+            isDragging = false;
+            initialDragHitboxRef.current = null;
+            primaryIntersectionRef.current = null;
+            setEntity(undefined);
+            setOrigin(undefined);
+            setPosition(undefined);
+            setDropStyles({});
+          }, dropDuration * 1000);
+
+          return;
+        }
+
         isDragging = false;
         initialDragHitboxRef.current = null;
+        primaryIntersectionRef.current = null;
         setEntity(undefined);
         setOrigin(undefined);
         setPosition(undefined);
@@ -355,6 +389,7 @@ export function DragOverlay({ children }: DragOverlayProps) {
     }px, 0px)`,
     width: `${hitbox[2] - hitbox[0]}px`,
     height: `${hitbox[3] - hitbox[1]}px`,
+    ...dropStyles,
   };
 
   return children(entity, style, intersections);
@@ -422,6 +457,7 @@ export function HitboxComponent({
 
   const hitboxRef = React.useRef<HTMLDivElement>(null);
   const [style, setStyle] = React.useState<React.CSSProperties>(initial);
+  const [isDragging, setIsDragging] = React.useState<boolean>(false);
 
   const styleRef = React.useRef<React.CSSProperties>(style);
 
@@ -438,19 +474,26 @@ export function HitboxComponent({
       }
     );
 
+    let dragHitboxAdjustments: Hitbox = [0, 0, 0, 0];
+    let dropEntity: Entity | null = null;
+
     const onEndDragIntersect = debounce(100, () => {
+      dropEntity = null;
       if (styleRef.current !== initial) {
         setStyle(initial);
         shift(id, 0, 0);
       }
     });
 
-    let dragHitboxAdjustments: Hitbox = [0, 0, 0, 0];
-
     const unsubscribe = [
       eventContext.on(
         "dragStart",
         (dragEntity, origin, position, adjustments) => {
+          if (dragEntity.getData().id === id) {
+            setIsDragging(true);
+            return;
+          }
+
           dragHitboxAdjustments = adjustments;
           if (!pathRef.current) return;
 
@@ -458,9 +501,6 @@ export function HitboxComponent({
             dragEntity.getPath(),
             pathRef.current
           );
-
-          if (direction === SiblingDirection.Self) {
-          }
 
           if (direction === SiblingDirection.After) {
             const hitbox = dragEntity.initial;
@@ -495,14 +535,14 @@ export function HitboxComponent({
         (dragEntity, intersectingEntity) => {
           const intersectionPath = intersectingEntity.getPath();
 
+          dropEntity = intersectingEntity;
+          onEndDragIntersect.cancel();
+
           if (
             dragEntity.getData().id === id ||
-            dragEntity === intersectingEntity
+            dragEntity === intersectingEntity ||
+            !pathRef.current
           ) {
-            return;
-          }
-
-          if (!pathRef.current || !dragEntity) {
             return;
           }
 
@@ -516,11 +556,9 @@ export function HitboxComponent({
             pathRef.current
           );
 
-          onEndDragIntersect.cancel();
-
           if (
-            direction === SiblingDirection.Self ||
-            direction === SiblingDirection.After
+            direction === SiblingDirection.After ||
+            direction === SiblingDirection.Self
           ) {
             const hitbox = dragEntity.initial;
             const height =
@@ -549,11 +587,36 @@ export function HitboxComponent({
         }
       ),
       eventContext.on("endDragIntersect", onEndDragIntersect),
-      eventContext.on("dragEnd", () => {
+      eventContext.on("dragEnd", (dragEntity, origin, position) => {
         onEndDragIntersect.cancel();
-        if (styleRef.current !== initial) {
-          setStyle(initial);
-          shift(id, 0, 0);
+
+        if (dropEntity) {
+          const dropHitbox = dropEntity.getHitbox();
+          const dropDuration = getDropDuration({
+            position,
+            destination: {
+              x: dropHitbox[0],
+              y: dropHitbox[1],
+            },
+          });
+
+          setTimeout(() => {
+            if (styleRef.current !== initial) {
+              setStyle(initial);
+              shift(id, 0, 0);
+            }
+            if (dragEntity.getData().id === id) {
+              setIsDragging(false);
+            }
+          }, dropDuration * 1000);
+        } else {
+          if (styleRef.current !== initial) {
+            setStyle(initial);
+            shift(id, 0, 0);
+          }
+          if (dragEntity.getData().id === id) {
+            setIsDragging(false);
+          }
         }
       }),
     ];
@@ -575,7 +638,6 @@ export function HitboxComponent({
 
       eventContext.emit("dragStartInternal", e.nativeEvent, id);
 
-      setStyle({ display: "none" });
       let _isDragging = true;
 
       const onMove = rafSchd((e: PointerEvent) => {
@@ -586,7 +648,6 @@ export function HitboxComponent({
 
       const onEnd = (e: PointerEvent) => {
         _isDragging = false;
-        setStyle(initial);
         eventContext.emit("dragEndInternal", e, id);
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onEnd);
@@ -600,10 +661,16 @@ export function HitboxComponent({
     [eventContext, id]
   );
 
+  const s = isDragging
+    ? {
+        display: "none",
+      }
+    : style;
+
   return (
     <HitboxContext data={data} hitboxRef={hitboxRef} id={id} index={index}>
       <div
-        style={style}
+        style={s}
         ref={hitboxRef}
         className={classcat([className, "box"])}
         onPointerDown={onPointerDown}

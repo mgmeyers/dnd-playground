@@ -4,7 +4,7 @@ import {
   Hitbox,
   Orientation,
   CoordinateShift,
-  ScrollOffset,
+  ScrollState,
 } from "./types";
 
 export function numberOrZero(n?: number) {
@@ -15,7 +15,7 @@ export function noop() {}
 
 export function calculateHitbox(
   rect: DOMRectReadOnly,
-  scroll: ScrollOffset | null,
+  scroll: ScrollState | null,
   scrollShift: CoordinateShift | null,
   manualShift: CoordinateShift | null
 ): Hitbox {
@@ -48,7 +48,7 @@ export function calculateHitbox(
 
 export function calculateScrollHitbox(
   rect: DOMRectReadOnly,
-  scroll: ScrollOffset | null,
+  scroll: ScrollState | null,
   scrollShift: CoordinateShift | null,
   orientation: Orientation,
   side: "before" | "after"
@@ -61,8 +61,7 @@ export function calculateScrollHitbox(
   }
 
   if (orientation === "horizontal" && side === "after") {
-    hitbox[0] =
-      hitbox[0] + rect.width - 35;
+    hitbox[0] = hitbox[0] + rect.width - 35;
     return hitbox;
   }
 
@@ -71,8 +70,7 @@ export function calculateScrollHitbox(
     return hitbox;
   }
 
-  hitbox[1] =
-    hitbox[1] + rect.height - 35;
+  hitbox[1] = hitbox[1] + rect.height - 35;
 
   return hitbox;
 }
@@ -82,7 +80,7 @@ export function adjustHitbox(
   minY: number,
   maxX: number,
   maxY: number,
-  scroll: ScrollOffset | null,
+  scroll: ScrollState | null,
   scrollShift: CoordinateShift | null
 ): Hitbox {
   return [
@@ -275,7 +273,7 @@ export function getBestIntersect(hits: Entity[], dragHitbox: Hitbox) {
   return hits[minValueIndex] ? hits[minValueIndex] : null;
 }
 
-export function getElementScrollOffsets(element: HTMLElement): ScrollOffset {
+export function getElementScrollOffsets(element: HTMLElement): ScrollState {
   const {
     scrollLeft,
     scrollTop,
@@ -297,5 +295,65 @@ export function getElementScrollOffsets(element: HTMLElement): ScrollOffset {
     y,
     xPct,
     yPct,
+  };
+}
+
+export function adjustHitboxForMovement(
+  hitbox: Hitbox,
+  origin: Coordinates,
+  position: Coordinates
+): Hitbox {
+  const xShift = position.x - origin.x;
+  const yShift = position.y - origin.y;
+
+  return [
+    hitbox[0] + xShift,
+    hitbox[1] + yShift,
+    hitbox[2] + xShift,
+    hitbox[3] + yShift,
+  ];
+}
+
+export function getScrollIntersectionDiff(
+  prev: [Entity, number][],
+  next: [Entity, number][]
+): {
+  add: [Entity, number][];
+  update: [Entity, number][];
+  remove: [Entity, number][];
+} {
+  const add: [Entity, number][] = [];
+  const remove: [Entity, number][] = [];
+  const update: [Entity, number][] = [];
+
+  const inPrev: Record<string, [Entity, number]> = {};
+  const inNext: Record<string, [Entity, number]> = {};
+
+  prev.forEach((intersection) => {
+    inPrev[intersection[0].getData().id] = intersection;
+  });
+
+  next.forEach((intersection) => {
+    const id = intersection[0].getData().id;
+
+    if (!inPrev[id]) {
+      add.push(intersection);
+    } else if (inPrev[id][1] !== intersection[1]) {
+      update.push(intersection);
+    }
+
+    inNext[id] = intersection;
+  });
+
+  prev.forEach((intersection) => {
+    if (!inNext[intersection[0].getData().id]) {
+      remove.push(intersection);
+    }
+  });
+
+  return {
+    add,
+    update,
+    remove,
   };
 }

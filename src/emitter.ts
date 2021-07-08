@@ -13,6 +13,7 @@ export interface Unsubscribe {
 export interface Emitter<Events extends EventsMap = DefaultEvents> {
   events: Partial<{ [E in keyof Events]: Array<Events[E]> }>;
   on<K extends keyof Events>(this: this, event: K, cb: Events[K]): Unsubscribe;
+  off<K extends keyof Events>(this: this, event: K, cb: Events[K]): void;
   emit<K extends keyof Events>(
     this: this,
     event: K,
@@ -40,17 +41,19 @@ export function createEmitter<
 
       handlers.push(cb);
 
-      return () => {
-        const handlers = this.events[event];
+      return () => this.off(event, cb);
+    },
 
-        if (handlers) {
-          handlers.splice(handlers.indexOf(cb) >>> 0, 1);
+    off(event, cb) {
+      const handlers = this.events[event];
 
-          if (handlers.length === 0) {
-            delete this.events[event];
-          }
+      if (handlers) {
+        handlers.splice(handlers.indexOf(cb) >>> 0, 1);
+
+        if (handlers.length === 0) {
+          delete this.events[event];
         }
-      };
+      }
     },
   };
 }

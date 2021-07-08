@@ -1,4 +1,8 @@
+// @deprecated
 export type Orientation = "horizontal" | "vertical";
+
+export type Axis = "horizontal" | "vertical";
+export type Side = "top" | "right" | "bottom" | "left";
 
 export interface NestableProps {
   id: string;
@@ -29,7 +33,7 @@ export interface CoordinateShift {
   y: number;
 }
 
-export interface ScrollOffset {
+export interface ScrollState {
   x: number;
   y: number;
   xPct: number;
@@ -58,7 +62,7 @@ export interface Entity {
   scopeId: string;
   initial: Hitbox;
   pathRef: React.MutableRefObject<{ path: Path }>;
-  scrollRef: React.RefObject<ScrollOffset>;
+  scrollRef: React.RefObject<ScrollState>;
   scrollShiftRef: React.RefObject<CoordinateShift>;
 }
 

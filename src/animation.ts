@@ -1,3 +1,4 @@
+import { distanceBetween } from "./helpers";
 import { Coordinates } from "./types";
 
 export const curves = {
@@ -43,23 +44,52 @@ export const isEqual = (point1: Coordinates, point2: Coordinates): boolean =>
 
 export const origin: Coordinates = { x: 0, y: 0 };
 
-const moveTo = (offset: Coordinates): string | null =>
-  isEqual(offset, origin) ? null : `translate(${offset.x}px, ${offset.y}px)`;
+const moveTo = (offset: Coordinates): string | undefined =>
+  isEqual(offset, origin) ? undefined : `translate(${offset.x}px, ${offset.y}px)`;
 
 export const transforms = {
   moveTo,
-  drop: (offset: Coordinates, isCombining: boolean) => {
-    const translate: string | null = moveTo(offset);
-    if (!translate) {
-      return null;
-    }
-
-    // only transforming the translate
-    if (!isCombining) {
-      return translate;
-    }
-
-    // when dropping while combining we also update the scale
-    return `${translate} scale(${combine.scale.drop})`;
+  drop: (offset: Coordinates) => {
+    return moveTo(offset);
   },
 };
+
+const dropTimeRange: number = timings.maxDropTime - timings.minDropTime;
+const maxDropTimeAtDistance: number = 1500;
+// will bring a time lower - which makes it faster
+const cancelDropModifier: number = 0.6;
+
+export function getDropDuration({
+  position,
+  destination,
+  isCancel,
+}: {
+  position: Coordinates;
+  destination: Coordinates;
+  isCancel?: boolean;
+}): number {
+  const distance: number = distanceBetween(position, destination);
+  // even if there is no distance to travel, we might still need to animate opacity
+  if (distance <= 0) {
+    return timings.minDropTime;
+  }
+
+  if (distance >= maxDropTimeAtDistance) {
+    return timings.maxDropTime;
+  }
+
+  // * range from:
+  // 0px = 0.33s
+  // 1500px and over = 0.55s
+  // * If reason === 'CANCEL' then speeding up the animation
+  // * round to 2 decimal points
+
+  const percentage: number = distance / maxDropTimeAtDistance;
+  const duration: number = timings.minDropTime + dropTimeRange * percentage;
+
+  const withDuration: number = isCancel
+    ? duration * cancelDropModifier
+    : duration;
+  // To two decimal points by converting to string and back
+  return Number(withDuration.toFixed(2));
+}
