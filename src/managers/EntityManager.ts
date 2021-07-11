@@ -1,5 +1,11 @@
-import { adjustHitbox, calculateHitbox } from "../helpers";
-import { Entity, EntityData, Path } from "../types";
+import { adjustHitbox, calculateHitbox } from "../util/hitbox";
+import {
+  Entity,
+  EntityData,
+  initialScrollShift,
+  initialScrollState,
+  Path,
+} from "../types";
 import { ScrollManager } from "./ScrollManager";
 
 export class EntityManager {
@@ -7,8 +13,8 @@ export class EntityManager {
   index: number;
   scopeId: string;
   children: Map<string, Entity>;
-  parent: EntityManager;
-  scrollParent: ScrollManager;
+  parent: EntityManager | null;
+  scrollParent: ScrollManager | null;
   getEntityData: () => EntityData;
 
   entityNode: HTMLElement;
@@ -18,9 +24,9 @@ export class EntityManager {
     scopeId: string,
     id: string,
     index: number,
-    parent: EntityManager,
-    scrollParent: ScrollManager,
-    getEntityData: () => EntityData,
+    parent: EntityManager | null,
+    scrollParent: ScrollManager | null,
+    getEntityData: () => EntityData
   ) {
     this.id = id;
     this.index = index;
@@ -30,6 +36,8 @@ export class EntityManager {
     this.scrollParent = scrollParent;
     this.entityNode = entityNode;
     this.getEntityData = getEntityData;
+
+    entityNode.dataset.hitboxid = id;
   }
 
   destroy() {}
@@ -44,22 +52,22 @@ export class EntityManager {
       scopeId: this.scopeId,
       initial: calculateHitbox(
         rect,
-        manager.scrollParent.scrollState,
-        manager.scrollParent.getScrollShift(),
+        manager.scrollParent?.scrollState || initialScrollState,
+        manager.scrollParent?.getScrollShift() || initialScrollShift,
         // TODO: shift?
         null
       ),
       getParentScrollState() {
-        return manager.scrollParent.scrollState;
+        return manager.scrollParent?.scrollState || initialScrollState;
       },
       getParentScrollShift() {
-        return manager.scrollParent.getScrollShift();
+        return manager.scrollParent?.getScrollShift() || initialScrollShift;
       },
       recalcInitial() {
         this.initial = calculateHitbox(
           manager.entityNode.getBoundingClientRect(),
-          manager.scrollParent.scrollState,
-          manager.scrollParent.getScrollShift(),
+          manager.scrollParent?.scrollState || initialScrollState,
+          manager.scrollParent?.getScrollShift() || initialScrollShift,
           // TODO: shift?
           null
         );
@@ -75,7 +83,7 @@ export class EntityManager {
         );
       },
       getPath() {
-        return this.pathRef.current.path;
+        return manager.getPath();
       },
       getData() {
         return manager.getEntityData();

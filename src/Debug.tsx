@@ -1,5 +1,5 @@
 import React from "react";
-import { useRaf } from "./raf";
+import { useRaf } from "./util/raf";
 import { Hitbox, Entity } from "./types";
 
 interface HitBoxDebugProps {

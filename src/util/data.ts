@@ -1,5 +1,5 @@
 import { LoremIpsum } from "lorem-ipsum";
-import { Item, Lane } from "./types";
+import { Item, Lane } from "../types";
 
 export function generateInstanceId(): string {
   return Math.random().toString(36).substr(2, 9);

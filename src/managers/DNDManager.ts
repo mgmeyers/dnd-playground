@@ -1,9 +1,9 @@
 import { debounce } from "throttle-debounce";
-import { createEmitter, Emitter } from "../emitter";
+import { createEmitter, Emitter } from "../util/emitter";
 import { Entity } from "../types";
 import { DragManager } from "./DragManager";
 
-export class DNDManager {
+export class DndManager {
   emitter: Emitter;
   hitboxEntities: Map<string, Entity>;
   scrollEntities: Map<string, Entity>;
@@ -33,7 +33,7 @@ export class DNDManager {
     );
   }
 
-  unload() {
+  destroy() {
     this.resizeObserver.disconnect();
   }
 
@@ -43,5 +43,21 @@ export class DNDManager {
 
   unobserveResize(element: HTMLElement) {
     this.resizeObserver.unobserve(element);
+  }
+
+  registerHitboxEntity(id: string, entity: Entity) {
+    this.hitboxEntities.set(id, entity);
+  }
+
+  registerScrollEntity(id: string, entity: Entity) {
+    this.scrollEntities.set(id, entity);
+  }
+
+  unregisterHitboxEntity(id: string) {
+    this.hitboxEntities.delete(id);
+  }
+
+  unregisterScrollEntity(id: string) {
+    this.scrollEntities.delete(id);
   }
 }

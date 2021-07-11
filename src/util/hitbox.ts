@@ -2,10 +2,24 @@ import {
   Coordinates,
   Entity,
   Hitbox,
-  Orientation,
   CoordinateShift,
   ScrollState,
-} from "./types";
+  Side,
+} from "../types";
+
+export const emptyDomRect: DOMRectReadOnly = {
+  bottom: 0,
+  height: 0,
+  left: 0,
+  right: 0,
+  top: 0,
+  width: 0,
+  x: 0,
+  y: 0,
+  toJSON() {},
+};
+
+export const emptyHitbox: Hitbox = [0, 0, 0, 0];
 
 export function numberOrZero(n?: number) {
   return n === undefined ? 0 : n;
@@ -50,28 +64,27 @@ export function calculateScrollHitbox(
   rect: DOMRectReadOnly,
   scroll: ScrollState | null,
   scrollShift: CoordinateShift | null,
-  orientation: Orientation,
-  side: "before" | "after"
+  side: Side
 ): Hitbox {
   const hitbox = calculateHitbox(rect, scroll, scrollShift, null);
 
-  if (orientation === "horizontal" && side === "before") {
-    hitbox[2] = hitbox[0] + 35;
-    return hitbox;
-  }
-
-  if (orientation === "horizontal" && side === "after") {
-    hitbox[0] = hitbox[0] + rect.width - 35;
-    return hitbox;
-  }
-
-  if (orientation === "vertical" && side === "before") {
+  if (side === "top") {
     hitbox[3] = hitbox[1] + 35;
     return hitbox;
   }
 
-  hitbox[1] = hitbox[1] + rect.height - 35;
+  if (side === "right") {
+    hitbox[0] = hitbox[0] + rect.width - 35;
+    return hitbox;
+  }
 
+  if (side === "bottom") {
+    hitbox[1] = hitbox[1] + rect.height - 35;
+    return hitbox;
+  }
+
+  // left
+  hitbox[2] = hitbox[0] + 35;
   return hitbox;
 }
 
@@ -162,19 +175,18 @@ export function getScrollIntersection(
   target: Hitbox
 ): Array<[Entity, number]> {
   return entities.map((e) => {
-    const orientation = e.getOrientation();
-    const side = e.getData().side as "before" | "after";
+    const side = e.getData().side as Side;
     const hitbox = e.getHitbox();
 
     let index = 0;
 
-    if (side === "before" && orientation === "horizontal") {
+    if (side === "left") {
       index = 0;
-    } else if (side === "after" && orientation === "horizontal") {
+    } else if (side === "right") {
       index = 2;
-    } else if (side === "before" && orientation === "vertical") {
+    } else if (side === "top") {
       index = 1;
-    } else if (side === "after" && orientation === "vertical") {
+    } else if (side === "bottom") {
       index = 3;
     }
 
@@ -261,7 +273,7 @@ export function getBestIntersect(hits: Entity[], dragHitbox: Hitbox) {
     const entityHitbox = entity.getHitbox();
     const entityTopLeft = cornersOfRectangle(entityHitbox)[0];
     const entityCenter = centerOfRectangle(dragHitbox);
-    const axis = entity.getOrientation() === "horizontal" ? "x" : "y";
+    const axis = entity.getData().sortAxis === "horizontal" ? "x" : "y";
 
     const modifier = entityCenter[axis] > dragTopLeft[axis] ? 1000 : 0;
 

@@ -1,6 +1,3 @@
-// @deprecated
-export type Orientation = "horizontal" | "vertical";
-
 export type Axis = "horizontal" | "vertical";
 export type Side = "top" | "right" | "bottom" | "left";
 
@@ -49,6 +46,7 @@ export interface EntityData {
   type: string;
   id: string;
   accepts: string[];
+  sortAxis?: Axis;
   [k: string]: any;
 }
 
@@ -56,16 +54,27 @@ export interface Entity {
   getPath(): Path;
   getHitbox(): Hitbox;
   getData(): EntityData;
-  getOrientation(): Orientation;
   recalcInitial(): void;
-
+  getParentScrollState(): ScrollState;
+  getParentScrollShift(): CoordinateShift;
+  
   scopeId: string;
   initial: Hitbox;
-  pathRef: React.MutableRefObject<{ path: Path }>;
-  scrollRef: React.RefObject<ScrollState>;
-  scrollShiftRef: React.RefObject<CoordinateShift>;
 }
 
 export interface WithChildren {
   children: React.ReactNode;
 }
+
+
+export const initialScrollState: ScrollState = {
+  x: 0,
+  y: 0,
+  xPct: 0,
+  yPct: 0,
+};
+
+export const initialScrollShift: CoordinateShift = {
+  x: 0,
+  y: 0,
+};

@@ -1,15 +1,46 @@
 import boxIntersect from "box-intersect";
-import { Emitter } from "../emitter";
+import { Emitter } from "../util/emitter";
 import {
   adjustHitboxForMovement,
   getBestIntersect,
   getScrollIntersection,
   getScrollIntersectionDiff,
-} from "../helpers";
-import { Coordinates, Entity, Hitbox } from "../types";
+} from "../util/hitbox";
+import { Coordinates, Entity, Hitbox, Side } from "../types";
+import rafSchd from "raf-schd";
+import React from "react";
+import { DndManagerContext } from "../components/context";
+
+export interface DragEventData {
+  dragEntity?: Entity;
+  dragEntityId?: string;
+  dragEntityMargin?: Hitbox;
+  dragOrigin?: Coordinates;
+  dragPosition?: Coordinates;
+  primaryIntersection?: Entity;
+  scrollIntersections?: [Entity, number][];
+}
+
+export interface ScrollEventData extends DragEventData {
+  scrollEntity: Entity;
+  scrollEntityId: string;
+  scrollEntitySide: Side;
+  scrollStrength: number;
+}
+
+interface Events {
+  dragStart(data: DragEventData): void;
+  dragMove(data: DragEventData): void;
+  dragEnd(data: DragEventData): void;
+  beginDragScroll(data: ScrollEventData): void;
+  updateDragScroll(data: ScrollEventData): void;
+  endDragScroll(data: ScrollEventData): void;
+  dragEnter(data: DragEventData): void;
+  dragLeave(data: DragEventData): void;
+}
 
 export class DragManager {
-  emitter: Emitter;
+  emitter: Emitter<Events>;
   hitboxEntities: Map<string, Entity>;
   scrollEntities: Map<string, Entity>;
 
@@ -44,12 +75,14 @@ export class DragManager {
     };
   }
 
-  dragStart(e: PointerEvent) {
-    const id = (e.target as HTMLElement).dataset.hitboxid;
+  dragStart(e: PointerEvent, referenceElement?: HTMLElement) {
+    const id = (e.currentTarget as HTMLElement).dataset.hitboxid;
 
     if (!id) return;
 
-    const styles = getComputedStyle(e.target as HTMLElement);
+    const styles = getComputedStyle(
+      referenceElement || (e.currentTarget as HTMLElement)
+    );
 
     this.dragEntityId = id;
     this.dragOrigin = { x: e.screenX, y: e.screenY };
@@ -67,15 +100,12 @@ export class DragManager {
 
   dragMove(e: PointerEvent) {
     this.dragPosition = { x: e.screenX, y: e.screenY };
-
     this.emitter.emit("dragMove", this.getDragEventData());
-
     this.calculateDragIntersect();
   }
 
   dragEnd(e: PointerEvent) {
     this.emitter.emit("dragEnd", this.getDragEventData());
-
     this.dragEntityMargin = undefined;
     this.dragEntity = undefined;
     this.dragEntityId = undefined;
@@ -136,27 +166,60 @@ export class DragManager {
     );
 
     add.forEach((e) => {
-      this.emitter.emit("beginDragScroll", {
-        ...this.getDragEventData(),
-        scrollEntity: e[0],
-        scrollStrength: e[1],
-      });
+      const [scrollEntity, scrollStrength] = e;
+      const scrollEntityData = scrollEntity.getData();
+      const scrollEntityId = scrollEntityData.id;
+      const scrollEntitySide = scrollEntityData.side;
+
+      this.emitter.emit(
+        "beginDragScroll",
+        {
+          ...this.getDragEventData(),
+          scrollEntity,
+          scrollEntityId,
+          scrollEntitySide,
+          scrollStrength,
+        },
+        scrollEntityId
+      );
     });
 
     update.forEach((e) => {
-      this.emitter.emit("updateDragScroll", {
-        ...this.getDragEventData(),
-        scrollEntity: e[0],
-        scrollStrength: e[1],
-      });
+      const [scrollEntity, scrollStrength] = e;
+      const scrollEntityData = scrollEntity.getData();
+      const scrollEntityId = scrollEntityData.id;
+      const scrollEntitySide = scrollEntityData.side;
+
+      this.emitter.emit(
+        "updateDragScroll",
+        {
+          ...this.getDragEventData(),
+          scrollEntity,
+          scrollEntityId,
+          scrollEntitySide,
+          scrollStrength,
+        },
+        scrollEntityId
+      );
     });
 
     remove.forEach((e) => {
-      this.emitter.emit("endDragScroll", {
-        ...this.getDragEventData(),
-        scrollEntity: e[0],
-        scrollStrength: e[1],
-      });
+      const [scrollEntity, scrollStrength] = e;
+      const scrollEntityData = scrollEntity.getData();
+      const scrollEntityId = scrollEntityData.id;
+      const scrollEntitySide = scrollEntityData.side;
+
+      this.emitter.emit(
+        "endDragScroll",
+        {
+          ...this.getDragEventData(),
+          scrollEntity,
+          scrollEntityId,
+          scrollEntitySide,
+          scrollStrength,
+        },
+        scrollEntityId
+      );
     });
 
     this.scrollIntersections = scrollIntersections;
@@ -177,7 +240,11 @@ export class DragManager {
       this.primaryIntersection &&
       this.primaryIntersection !== primaryIntersection
     ) {
-      this.emitter.emit("dragLeave", this.dragEntity, this.primaryIntersection);
+      this.emitter.emit(
+        "dragLeave",
+        this.getDragEventData(),
+        this.primaryIntersection.getData().id
+      );
       this.primaryIntersection = undefined;
     }
 
@@ -185,8 +252,60 @@ export class DragManager {
       primaryIntersection &&
       this.primaryIntersection !== primaryIntersection
     ) {
-      this.emitter.emit("dragEnter", this.dragEntity, primaryIntersection);
+      this.emitter.emit(
+        "dragEnter",
+        {
+          ...this.getDragEventData(),
+          primaryIntersection,
+        },
+        primaryIntersection.getData().id
+      );
       this.primaryIntersection = primaryIntersection;
     }
   }
+}
+
+export function useDragHandle(
+  droppableElement: React.MutableRefObject<HTMLElement | null>,
+  handleElement: React.MutableRefObject<HTMLElement | null>
+) {
+  const dndManager = React.useContext(DndManagerContext);
+
+  React.useEffect(() => {
+    const droppable = droppableElement.current;
+    const handle = handleElement.current;
+
+    if (!dndManager || !droppable || !handle) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+
+      let isDragging = true;
+
+      dndManager.dragManager.dragStart(e, droppable);
+
+      const onMove = rafSchd((e: PointerEvent) => {
+        if (isDragging) dndManager.dragManager.dragMove(e);
+      });
+
+      const onEnd = (e: PointerEvent) => {
+        isDragging = false;
+
+        dndManager.dragManager.dragEnd(e);
+
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onEnd);
+        window.removeEventListener("pointercancel", onEnd);
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onEnd);
+      window.addEventListener("pointercancel", onEnd);
+    };
+
+    handle.addEventListener("pointerdown", onPointerDown);
+
+    return () => handle.removeEventListener("pointerdown", onPointerDown);
+  }, [droppableElement, handleElement, dndManager]);
 }

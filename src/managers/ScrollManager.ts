@@ -1,67 +1,31 @@
 import rafSchd from "raf-schd";
-import { generateInstanceId } from "../data";
+import { generateInstanceId } from "../util/data";
 import {
   adjustHitbox,
-  calculateHitbox,
+  calculateScrollHitbox,
   getElementScrollOffsets,
   numberOrZero,
-} from "../helpers";
+} from "../util/hitbox";
 import {
   CoordinateShift,
   Entity,
-  Hitbox,
+  initialScrollShift,
+  initialScrollState,
   Path,
   ScrollState,
   Side,
 } from "../types";
+import { DndManager } from "./DndManager";
+import { ScrollEventData } from "./DragManager";
 
 export type IntersectionObserverHandler = (
   entry: IntersectionObserverEntry
 ) => void;
 
-const initialScrollState: ScrollState = {
-  x: 0,
-  y: 0,
-  xPct: 0,
-  yPct: 0,
-};
-
-const initialScrollShift: CoordinateShift = {
-  x: 0,
-  y: 0,
-};
-
 export const scrollContainerEntityType = "scroll-container";
 
-function calculateScrollHitbox(
-  rect: DOMRectReadOnly,
-  scroll: ScrollState | null,
-  scrollShift: CoordinateShift | null,
-  side: Side
-): Hitbox {
-  const hitbox = calculateHitbox(rect, scroll, scrollShift, null);
-
-  if (side === "top") {
-    hitbox[3] = hitbox[1] + 35;
-    return hitbox;
-  }
-
-  if (side === "right") {
-    hitbox[0] = hitbox[0] + rect.width - 35;
-    return hitbox;
-  }
-
-  if (side === "bottom") {
-    hitbox[1] = hitbox[1] + rect.height - 35;
-    return hitbox;
-  }
-
-  // left
-  hitbox[2] = hitbox[0] + 35;
-  return hitbox;
-}
-
 export class ScrollManager {
+  dndManager: DndManager;
   id: string;
   scopeId: string;
   triggerTypes: string[];
@@ -78,24 +42,33 @@ export class ScrollManager {
   left: Entity;
 
   scrollFrame: number = 0;
+  activeScroll: Map<Side, number>;
 
   constructor(
+    dndManager: DndManager,
     scopeId: string,
     scrollEl: HTMLElement,
     triggerTypes: string[],
     parent: ScrollManager | null
   ) {
+    this.dndManager = dndManager;
     this.id = generateInstanceId();
     this.scopeId = scopeId;
     this.scrollEl = scrollEl;
     this.triggerTypes = triggerTypes;
     this.scrollState = initialScrollState;
     this.parent = parent;
+    this.activeScroll = new Map();
 
-    this.top = this.createScrollHitbox("top");
-    this.right = this.createScrollHitbox("right");
-    this.bottom = this.createScrollHitbox("bottom");
-    this.left = this.createScrollHitbox("left");
+    this.top = this.createScrollEntity("top");
+    this.right = this.createScrollEntity("right");
+    this.bottom = this.createScrollEntity("bottom");
+    this.left = this.createScrollEntity("left");
+
+    this.bindScrollHandlers("top");
+    this.bindScrollHandlers("right");
+    this.bindScrollHandlers("bottom");
+    this.bindScrollHandlers("left");
 
     this.observerHandlers = new Map();
     this.observer = new IntersectionObserver(
@@ -116,15 +89,93 @@ export class ScrollManager {
         threshold: 0.1,
       }
     );
+
+    this.scrollEl.addEventListener("scroll", this.onScroll);
   }
 
   destroy() {
     this.observer.disconnect();
+    this.unbindScrollHandlers("top");
+    this.unbindScrollHandlers("right");
+    this.unbindScrollHandlers("bottom");
+    this.unbindScrollHandlers("left");
+    this.scrollEl.removeEventListener("scroll", this.onScroll);
+  }
+
+  registerObserverHandler(
+    id: string,
+    element: HTMLElement,
+    handler: IntersectionObserverHandler
+  ) {
+    this.observerHandlers.set(id, handler);
+    this.observer.observe(element);
+  }
+
+  unregisterObserverHandler(id: string, element: HTMLElement) {
+    this.observerHandlers.delete(id);
+    this.observer.unobserve(element);
+  }
+
+  bindScrollHandlers(side: Side) {
+    const id = `${this.id}-${side}`;
+    this.dndManager.dragManager.emitter.on(
+      "beginDragScroll",
+      this.handleBeginDragScroll,
+      id
+    );
+    this.dndManager.dragManager.emitter.on(
+      "updateDragScroll",
+      this.handleUpdateDragScroll,
+      id
+    );
+    this.dndManager.dragManager.emitter.on(
+      "endDragScroll",
+      this.handleEndDragScroll,
+      id
+    );
+  }
+
+  unbindScrollHandlers(side: Side) {
+    const id = `${this.id}-${side}`;
+    this.dndManager.dragManager.emitter.off(
+      "beginDragScroll",
+      this.handleBeginDragScroll,
+      id
+    );
+    this.dndManager.dragManager.emitter.off(
+      "updateDragScroll",
+      this.handleUpdateDragScroll,
+      id
+    );
+    this.dndManager.dragManager.emitter.off(
+      "endDragScroll",
+      this.handleEndDragScroll,
+      id
+    );
   }
 
   onScroll = rafSchd(() => {
     this.scrollState = getElementScrollOffsets(this.scrollEl);
   });
+
+  handleBeginDragScroll = ({
+    scrollEntitySide,
+    scrollStrength,
+  }: ScrollEventData) => {
+    this.activeScroll.set(scrollEntitySide, scrollStrength);
+    this.handleDragScroll();
+  };
+
+  handleUpdateDragScroll = ({
+    scrollEntitySide,
+    scrollStrength,
+  }: ScrollEventData) => {
+    this.activeScroll.set(scrollEntitySide, scrollStrength);
+  };
+
+  handleEndDragScroll = ({ scrollEntitySide }: ScrollEventData) => {
+    this.activeScroll.delete(scrollEntitySide);
+  };
 
   isDoneScrolling(side: Side) {
     switch (side) {
@@ -139,19 +190,32 @@ export class ScrollManager {
     }
   }
 
-  handleDragScroll(side: Side, scrollStrength: number) {
-    if (this.isDoneScrolling(side)) return false;
+  handleDragScroll() {
+    if (this.activeScroll.size === 0) return;
 
-    const scrollKey = ["left", "right"].includes(side) ? "left" : "top";
-    const shouldIncreaseScroll = ["right", "bottom"].includes(side);
+    requestAnimationFrame(() => {
+      const scrollBy = {
+        left: 0,
+        top: 0,
+      };
 
-    this.scrollEl.scrollBy({
-      [scrollKey]: shouldIncreaseScroll
-        ? Math.max(13 - (13 * scrollStrength) / 35, 0)
-        : Math.min(-13 + (13 * scrollStrength) / 35, 0),
+      this.activeScroll.forEach((strength, side) => {
+        if (this.isDoneScrolling(side)) {
+          return this.activeScroll.delete(side);
+        }
+
+        const scrollKey = ["left", "right"].includes(side) ? "left" : "top";
+        const shouldIncreaseScroll = ["right", "bottom"].includes(side);
+
+        scrollBy[scrollKey] = shouldIncreaseScroll
+          ? Math.max(13 - (13 * strength) / 35, 0)
+          : Math.min(-13 + (13 * strength) / 35, 0);
+      });
+
+      this.scrollEl.scrollBy(scrollBy);
+
+      this.handleDragScroll();
     });
-
-    return true;
   }
 
   getPath(side?: Side): Path {
@@ -177,7 +241,7 @@ export class ScrollManager {
     };
   }
 
-  createScrollHitbox(side: Side): Entity {
+  createScrollEntity(side: Side): Entity {
     const manager = this;
 
     return {
@@ -217,7 +281,7 @@ export class ScrollManager {
       },
       getData() {
         return {
-          id: `${manager}-${side}`,
+          id: `${manager.id}-${side}`,
           type: scrollContainerEntityType,
           side: side,
           accepts: manager.triggerTypes || [],

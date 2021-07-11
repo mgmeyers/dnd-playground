@@ -1,5 +1,5 @@
-import { distanceBetween } from "./helpers";
-import { Coordinates } from "./types";
+import { distanceBetween } from "./hitbox";
+import { Coordinates } from "../types";
 
 export const curves = {
   outOfTheWay: "cubic-bezier(0.2, 0, 0, 1)",
@@ -11,28 +11,28 @@ export const combine = {
     // while dropping: fade out totally
     drop: 0,
     // while dragging: fade out partially
-    combining: 0.7,
+    combining: 700,
   },
   scale: {
-    drop: 0.75,
+    drop: 750,
   },
 };
 
 export const timings = {
-  outOfTheWay: 0.2,
-  minDropTime: 0.33,
-  maxDropTime: 0.55,
+  outOfTheWay: 200,
+  minDropTime: 330,
+  maxDropTime: 550,
 };
 
-const outOfTheWayTiming: string = `${timings.outOfTheWay}s ${curves.outOfTheWay}`;
-export const placeholderTransitionDelayTime: number = 0.1;
+const outOfTheWayTiming: string = `${timings.outOfTheWay}ms ${curves.outOfTheWay}`;
+export const placeholderTransitionDelayTime: number = 100;
 
 export const transitions = {
   none: `none`,
   fluid: `opacity ${outOfTheWayTiming}`,
   snap: `transform ${outOfTheWayTiming}, opacity ${outOfTheWayTiming}`,
   drop: (duration: number): string => {
-    const timing: string = `${duration}s ${curves.drop}`;
+    const timing: string = `${duration}ms ${curves.drop}`;
     return `transform ${timing}, opacity ${timing}`;
   },
   outOfTheWay: `transform ${outOfTheWayTiming}`,
@@ -45,7 +45,9 @@ export const isEqual = (point1: Coordinates, point2: Coordinates): boolean =>
 export const origin: Coordinates = { x: 0, y: 0 };
 
 const moveTo = (offset: Coordinates): string | undefined =>
-  isEqual(offset, origin) ? undefined : `translate(${offset.x}px, ${offset.y}px)`;
+  isEqual(offset, origin)
+    ? undefined
+    : `translate(${offset.x}px, ${offset.y}px)`;
 
 export const transforms = {
   moveTo,
@@ -90,6 +92,6 @@ export function getDropDuration({
   const withDuration: number = isCancel
     ? duration * cancelDropModifier
     : duration;
-  // To two decimal points by converting to string and back
-  return Number(withDuration.toFixed(2));
+
+  return Math.round(withDuration);
 }
