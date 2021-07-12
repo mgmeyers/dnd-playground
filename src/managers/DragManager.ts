@@ -16,6 +16,7 @@ export interface DragEventData {
   dragEntityId?: string;
   dragEntityMargin?: Hitbox;
   dragOrigin?: Coordinates;
+  dragOriginHitbox?: Hitbox;
   dragPosition?: Coordinates;
   primaryIntersection?: Entity;
   scrollIntersections?: [Entity, number][];
@@ -48,6 +49,7 @@ export class DragManager {
   dragEntityId?: string;
   dragEntityMargin?: Hitbox;
   dragOrigin?: Coordinates;
+  dragOriginHitbox?: Hitbox;
   dragPosition?: Coordinates;
 
   primaryIntersection?: Entity;
@@ -69,6 +71,7 @@ export class DragManager {
       dragEntityId: this.dragEntityId,
       dragEntityMargin: this.dragEntityMargin,
       dragOrigin: this.dragOrigin,
+      dragOriginHitbox: this.dragOriginHitbox,
       dragPosition: this.dragPosition,
       primaryIntersection: this.primaryIntersection,
       scrollIntersections: this.scrollIntersections,
@@ -88,6 +91,7 @@ export class DragManager {
     this.dragOrigin = { x: e.screenX, y: e.screenY };
     this.dragPosition = { x: e.screenX, y: e.screenY };
     this.dragEntity = this.hitboxEntities.get(id);
+    this.dragOriginHitbox = this.dragEntity?.getHitbox();
     this.dragEntityMargin = [
       parseFloat(styles.marginRight) || 0,
       parseFloat(styles.marginTop) || 0,
@@ -110,13 +114,21 @@ export class DragManager {
     this.dragEntity = undefined;
     this.dragEntityId = undefined;
     this.dragOrigin = undefined;
+    this.dragOriginHitbox = undefined;
     this.dragPosition = undefined;
     this.scrollIntersections = undefined;
     this.primaryIntersection = undefined;
   }
 
   calculateDragIntersect() {
-    if (!this.dragEntity || !this.dragPosition || !this.dragOrigin) return;
+    if (
+      !this.dragEntity ||
+      !this.dragPosition ||
+      !this.dragOrigin ||
+      !this.dragOriginHitbox
+    ) {
+      return;
+    }
 
     const { type } = this.dragEntity.getData();
 
@@ -140,7 +152,7 @@ export class DragManager {
     });
 
     const dragHitbox = adjustHitboxForMovement(
-      this.dragEntity.getHitbox(),
+      this.dragOriginHitbox,
       this.dragOrigin,
       this.dragPosition
     );
@@ -164,6 +176,8 @@ export class DragManager {
       this.scrollIntersections || [],
       scrollIntersections
     );
+
+    this.scrollIntersections = scrollIntersections;
 
     add.forEach((e) => {
       const [scrollEntity, scrollStrength] = e;
@@ -221,8 +235,6 @@ export class DragManager {
         scrollEntityId
       );
     });
-
-    this.scrollIntersections = scrollIntersections;
   }
 
   handleHitboxIntersect(

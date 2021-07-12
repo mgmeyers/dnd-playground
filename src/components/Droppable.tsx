@@ -79,7 +79,9 @@ export function Droppable({
     const targetEl = elementRef.current;
 
     if (!dndManager || !entityManager || !targetEl) return;
-    
+
+    dndManager.observeResize(targetEl);
+
     if (parentScrollManager) {
       parentScrollManager.registerObserverHandler(id, targetEl, (entry) => {
         if (entry.isIntersecting) {
@@ -101,6 +103,7 @@ export function Droppable({
     return () => {
       parentScrollManager?.unregisterObserverHandler(id, targetEl);
       dndManager.unregisterHitboxEntity(id);
+      dndManager.unobserveResize(targetEl);
     };
   }, [id, entityManager, dndManager, parentScrollManager, elementRef]);
 

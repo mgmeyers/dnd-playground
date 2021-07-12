@@ -9,6 +9,7 @@ import { EntityData } from "./types";
 import { useDragHandle } from "./managers/DragManager";
 import { Sortable } from "./components/Sortable";
 import { SortPlaceholder } from "./components/SortPlaceholder";
+import { Debug, DebugScrollContainers } from "./Debug";
 
 export function DragStage() {
   // TODO: move this work into the scroll container via React.memo comparators
@@ -79,10 +80,11 @@ export function DragStage() {
             <div style={styles} className="hitbox">
               DRAG
             </div>
-            {/* <DebugIntersections hitboxes={intersections} /> */}
           </>
         )}
       </DragOverlay>
+      <Debug />
+      <DebugScrollContainers />
     </DndContext>
   );
 }

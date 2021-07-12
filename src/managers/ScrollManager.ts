@@ -60,6 +60,8 @@ export class ScrollManager {
     this.parent = parent;
     this.activeScroll = new Map();
 
+    this.scrollEl.dataset.hitboxid = this.id;
+
     this.top = this.createScrollEntity("top");
     this.right = this.createScrollEntity("right");
     this.bottom = this.createScrollEntity("bottom");
@@ -90,7 +92,11 @@ export class ScrollManager {
       }
     );
 
-    this.scrollEl.addEventListener("scroll", this.onScroll);
+    this.scrollEl.addEventListener("scroll", this.onScroll, {
+      passive: true,
+      capture: false,
+    });
+    this.onScroll();
   }
 
   destroy() {
@@ -162,6 +168,8 @@ export class ScrollManager {
     scrollEntitySide,
     scrollStrength,
   }: ScrollEventData) => {
+    if (this.isDoneScrolling(scrollEntitySide)) return;
+
     this.activeScroll.set(scrollEntitySide, scrollStrength);
     this.handleDragScroll();
   };
@@ -170,6 +178,8 @@ export class ScrollManager {
     scrollEntitySide,
     scrollStrength,
   }: ScrollEventData) => {
+    if (this.isDoneScrolling(scrollEntitySide)) return;
+
     this.activeScroll.set(scrollEntitySide, scrollStrength);
   };
 
@@ -180,18 +190,20 @@ export class ScrollManager {
   isDoneScrolling(side: Side) {
     switch (side) {
       case "top":
-        return this.scrollState.yPct === 0;
+        return this.scrollState.y === 0;
       case "right":
-        return this.scrollState.xPct === 1;
+        return this.scrollState.x === this.scrollState.maxX;
       case "bottom":
-        return this.scrollState.yPct === 1;
+        return this.scrollState.y === this.scrollState.maxY;
       case "left":
-        return this.scrollState.xPct === 0;
+        return this.scrollState.x === 0;
     }
   }
 
   handleDragScroll() {
-    if (this.activeScroll.size === 0) return;
+    if (this.activeScroll.size === 0) {
+      return;
+    }
 
     requestAnimationFrame(() => {
       const scrollBy = {
@@ -213,7 +225,6 @@ export class ScrollManager {
       });
 
       this.scrollEl.scrollBy(scrollBy);
-
       this.handleDragScroll();
     });
   }
@@ -236,8 +247,10 @@ export class ScrollManager {
     const parentShift = this.parent?.getScrollShift();
 
     return {
-      x: this.scrollState.x + numberOrZero(parentShift?.x),
-      y: this.scrollState.y + numberOrZero(parentShift?.y),
+      x:
+        numberOrZero(this.parent?.scrollState.x) + numberOrZero(parentShift?.x),
+      y:
+        numberOrZero(this.parent?.scrollState.y) + numberOrZero(parentShift?.y),
     };
   }
 

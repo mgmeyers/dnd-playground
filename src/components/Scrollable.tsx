@@ -43,6 +43,8 @@ export function Scrollable({
 
     if (!dndManager || !scrollManager || !targetEl) return;
 
+    dndManager.observeResize(targetEl);
+
     const topId = scrollManager.top.getData().id;
     const rightId = scrollManager.right.getData().id;
     const bottomId = scrollManager.bottom.getData().id;
@@ -78,6 +80,7 @@ export function Scrollable({
         scrollManager.id,
         targetEl
       );
+      dndManager.unobserveResize(targetEl);
       dndManager.unregisterScrollEntity(topId);
       dndManager.unregisterScrollEntity(rightId);
       dndManager.unregisterScrollEntity(bottomId);

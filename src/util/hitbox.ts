@@ -299,14 +299,12 @@ export function getElementScrollOffsets(element: HTMLElement): ScrollState {
   const y = scrollTop;
   const maxX = scrollWidth - offsetWidth;
   const maxY = scrollHeight - offsetHeight;
-  const xPct = !x || !maxX ? 0 : x / maxX;
-  const yPct = !y || !maxY ? 0 : y / maxY;
 
   return {
     x,
     y,
-    xPct,
-    yPct,
+    maxX,
+    maxY,
   };
 }
 
@@ -315,8 +313,8 @@ export function adjustHitboxForMovement(
   origin: Coordinates,
   position: Coordinates
 ): Hitbox {
-  const xShift = position.x - origin.x;
-  const yShift = position.y - origin.y;
+  const xShift = Math.trunc((position.x - origin.x) * 100) / 100;
+  const yShift = Math.trunc((position.y - origin.y) * 100) / 100;
 
   return [
     hitbox[0] + xShift,

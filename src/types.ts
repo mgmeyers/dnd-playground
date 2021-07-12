@@ -33,8 +33,8 @@ export interface CoordinateShift {
 export interface ScrollState {
   x: number;
   y: number;
-  xPct: number;
-  yPct: number;
+  maxX: number;
+  maxY: number;
 }
 export interface Coordinates {
   x: number;
@@ -57,7 +57,7 @@ export interface Entity {
   recalcInitial(): void;
   getParentScrollState(): ScrollState;
   getParentScrollShift(): CoordinateShift;
-  
+
   scopeId: string;
   initial: Hitbox;
 }
@@ -66,12 +66,11 @@ export interface WithChildren {
   children: React.ReactNode;
 }
 
-
 export const initialScrollState: ScrollState = {
   x: 0,
   y: 0,
-  xPct: 0,
-  yPct: 0,
+  maxX: 0,
+  maxY: 0,
 };
 
 export const initialScrollShift: CoordinateShift = {

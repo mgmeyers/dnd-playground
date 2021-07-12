@@ -1,6 +1,7 @@
 import React from "react";
 import { useRaf } from "./util/raf";
 import { Hitbox, Entity } from "./types";
+import { DndManagerContext } from "./components/context";
 
 interface HitBoxDebugProps {
   hitbox: Hitbox;
@@ -24,60 +25,49 @@ function HitBoxDebug({ color, hitbox, zIndex }: HitBoxDebugProps) {
   return <div className="hitbox" style={style}></div>;
 }
 
-export function DebugScrollContainers({
-  hitboxes,
-}: {
-  hitboxes: React.RefObject<Map<string, Entity>>;
-}) {
+export function DebugScrollContainers() {
+  const dndManager = React.useContext(DndManagerContext);
   const [, update] = React.useState(0);
 
   useRaf(({ time }) => {
     update(time);
   }, []);
 
-  if (!hitboxes.current) return null;
+  if (!dndManager?.scrollEntities) return null;
 
   return (
     <>
-      {Array.from(hitboxes.current.entries())
-        .filter(([id, hb]) => {
-          return hb.getData().type === "scrollContainer";
-        })
-        .map(([id, hb]) => {
-          return (
-            <HitBoxDebug
-              zIndex={9999}
-              color="#8787d3"
-              key={id}
-              hitbox={hb.getHitbox()}
-            />
-          );
-        })}
+      {Array.from(dndManager?.scrollEntities.entries()).map(([id, hb]) => {
+        return (
+          <HitBoxDebug
+            zIndex={9999}
+            color="#8787d3"
+            key={id}
+            hitbox={hb.getHitbox()}
+          />
+        );
+      })}
     </>
   );
 }
 
-export function Debug({
-  hitboxes,
-}: {
-  hitboxes: React.RefObject<Map<string, Entity>>;
-}) {
+export function Debug() {
+  const dndManager = React.useContext(DndManagerContext);
   const [, update] = React.useState(0);
 
   useRaf(({ time }) => {
     update(time);
   }, []);
 
-  if (!hitboxes.current) return null;
+  if (!dndManager?.hitboxEntities) return null;
 
   return (
     <>
-      {Array.from(hitboxes.current.entries()).map(([id, hb]) => {
-        const isScroll = hb.getData().type === "scrollContainer";
+      {Array.from(dndManager?.hitboxEntities.entries()).map(([id, hb]) => {
         return (
           <HitBoxDebug
-            zIndex={isScroll ? 9999 : 8888}
-            color={isScroll ? "#8787d3" : "#058294"}
+            zIndex={9998}
+            color="tomato"
             key={id}
             hitbox={hb.getHitbox()}
           />
