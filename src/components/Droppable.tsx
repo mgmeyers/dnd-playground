@@ -8,7 +8,6 @@ import {
   ScrollManagerContext,
   SortManagerContext,
 } from "./context";
-import { emptyDomRect } from "../util/hitbox";
 
 interface DraggableProps extends WithChildren {
   id: string;
@@ -34,15 +33,17 @@ export function Droppable({
   const [entityManager, setEntityManager] = React.useState<EntityManager>();
 
   React.useEffect(() => {
-    if (elementRef.current) {
+    if (dndManager && elementRef.current) {
       const manager = new EntityManager(
+        dndManager,
         elementRef.current,
         scopeId,
         id,
         index,
         parentEntityManager,
         parentScrollManager,
-        () => ({ ...dataRef.current, sortAxis: sortManager?.axis })
+        sortManager,
+        () => dataRef.current
       );
 
       setEntityManager(manager);
@@ -55,57 +56,12 @@ export function Droppable({
     elementRef,
 
     //
+    dndManager,
     scopeId,
     parentEntityManager,
     parentScrollManager,
     sortManager,
   ]);
-
-  React.useEffect(() => {
-    if (sortManager && entityManager && elementRef.current) {
-      sortManager.registerSortable(
-        id,
-        entityManager.getEntity(emptyDomRect),
-        elementRef.current
-      );
-
-      return () => {
-        sortManager.unregisterSortable(id);
-      };
-    }
-  }, [entityManager, sortManager, id, elementRef]);
-
-  React.useEffect(() => {
-    const targetEl = elementRef.current;
-
-    if (!dndManager || !entityManager || !targetEl) return;
-
-    dndManager.observeResize(targetEl);
-
-    if (parentScrollManager) {
-      parentScrollManager.registerObserverHandler(id, targetEl, (entry) => {
-        if (entry.isIntersecting) {
-          dndManager.registerHitboxEntity(
-            id,
-            entityManager.getEntity(entry.boundingClientRect)
-          );
-        } else {
-          dndManager.unregisterHitboxEntity(id);
-        }
-      });
-    } else {
-      dndManager.registerHitboxEntity(
-        id,
-        entityManager.getEntity(targetEl.getBoundingClientRect())
-      );
-    }
-
-    return () => {
-      parentScrollManager?.unregisterObserverHandler(id, targetEl);
-      dndManager.unregisterHitboxEntity(id);
-      dndManager.unobserveResize(targetEl);
-    };
-  }, [id, entityManager, dndManager, parentScrollManager, elementRef]);
 
   if (!entityManager) {
     return null;

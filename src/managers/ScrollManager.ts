@@ -97,6 +97,20 @@ export class ScrollManager {
       capture: false,
     });
     this.onScroll();
+
+    this.dndManager.observeResize(this.scrollEl);
+
+    if (this.parent) {
+      this.parent.registerObserverHandler(this.id, this.scrollEl, (entry) => {
+        if (entry.isIntersecting) {
+          this.handleEntityRegistration();
+        } else {
+          this.handleEntityUnregistration();
+        }
+      });
+    } else {
+      this.handleEntityRegistration();
+    }
   }
 
   destroy() {
@@ -106,6 +120,36 @@ export class ScrollManager {
     this.unbindScrollHandlers("bottom");
     this.unbindScrollHandlers("left");
     this.scrollEl.removeEventListener("scroll", this.onScroll);
+    this.parent?.unregisterObserverHandler(this.id, this.scrollEl);
+    this.dndManager.unobserveResize(this.scrollEl);
+    this.handleEntityUnregistration();
+  }
+
+  handleEntityRegistration() {
+    const sides: Side[] = ["top", "right", "bottom", "left"];
+
+    sides.forEach((side) => {
+      const id = this.getId(side);
+      const hasId = this.dndManager.scrollEntities.has(id);
+      const isDoneScrolling = this.isDoneScrolling(side);
+
+      if (!isDoneScrolling && !hasId) {
+        this.dndManager.registerScrollEntity(id, this[side]);
+      } else if (isDoneScrolling && hasId) {
+        this.dndManager.unregisterScrollEntity(id);
+      }
+    });
+  }
+
+  handleEntityUnregistration() {
+    const sides: Side[] = ["top", "right", "bottom", "left"];
+
+    sides.forEach((side) => {
+      const id = this.getId(side);
+      if (this.dndManager.scrollEntities.has(id)) {
+        this.dndManager.unregisterScrollEntity(id);
+      }
+    });
   }
 
   registerObserverHandler(
@@ -139,6 +183,7 @@ export class ScrollManager {
       this.handleEndDragScroll,
       id
     );
+    this.dndManager.dragManager.emitter.on("dragEnd", this.onDragEnd);
   }
 
   unbindScrollHandlers(side: Side) {
@@ -158,11 +203,17 @@ export class ScrollManager {
       this.handleEndDragScroll,
       id
     );
+    this.dndManager.dragManager.emitter.off("dragEnd", this.onDragEnd);
   }
 
   onScroll = rafSchd(() => {
     this.scrollState = getElementScrollOffsets(this.scrollEl);
+    this.handleEntityRegistration();
   });
+
+  onDragEnd = () => {
+    this.activeScroll.clear();
+  };
 
   handleBeginDragScroll = ({
     scrollEntitySide,
@@ -227,6 +278,10 @@ export class ScrollManager {
       this.scrollEl.scrollBy(scrollBy);
       this.handleDragScroll();
     });
+  }
+
+  getId(side: Side) {
+    return `${this.id}-${side}`;
   }
 
   getPath(side?: Side): Path {
@@ -294,7 +349,7 @@ export class ScrollManager {
       },
       getData() {
         return {
-          id: `${manager.id}-${side}`,
+          id: manager.getId(side),
           type: scrollContainerEntityType,
           side: side,
           accepts: manager.triggerTypes || [],

@@ -38,56 +38,6 @@ export function Scrollable({
     }
   }, [dndManager, scopeId, scrollRef, triggerTypes, parentScrollManager]);
 
-  React.useEffect(() => {
-    const targetEl = scrollRef.current;
-
-    if (!dndManager || !scrollManager || !targetEl) return;
-
-    dndManager.observeResize(targetEl);
-
-    const topId = scrollManager.top.getData().id;
-    const rightId = scrollManager.right.getData().id;
-    const bottomId = scrollManager.bottom.getData().id;
-    const leftId = scrollManager.left.getData().id;
-
-    if (parentScrollManager) {
-      parentScrollManager.registerObserverHandler(
-        scrollManager.id,
-        targetEl,
-        (entry) => {
-          if (entry.isIntersecting) {
-            dndManager.registerScrollEntity(topId, scrollManager.top);
-            dndManager.registerScrollEntity(rightId, scrollManager.right);
-            dndManager.registerScrollEntity(bottomId, scrollManager.bottom);
-            dndManager.registerScrollEntity(leftId, scrollManager.left);
-          } else {
-            dndManager.unregisterScrollEntity(topId);
-            dndManager.unregisterScrollEntity(rightId);
-            dndManager.unregisterScrollEntity(bottomId);
-            dndManager.unregisterScrollEntity(leftId);
-          }
-        }
-      );
-    } else {
-      dndManager.registerScrollEntity(topId, scrollManager.top);
-      dndManager.registerScrollEntity(rightId, scrollManager.right);
-      dndManager.registerScrollEntity(bottomId, scrollManager.bottom);
-      dndManager.registerScrollEntity(leftId, scrollManager.left);
-    }
-
-    return () => {
-      parentScrollManager?.unregisterObserverHandler(
-        scrollManager.id,
-        targetEl
-      );
-      dndManager.unobserveResize(targetEl);
-      dndManager.unregisterScrollEntity(topId);
-      dndManager.unregisterScrollEntity(rightId);
-      dndManager.unregisterScrollEntity(bottomId);
-      dndManager.unregisterScrollEntity(leftId);
-    };
-  }, [dndManager, scrollManager, parentScrollManager, scrollRef]);
-
   if (!scrollManager) {
     return null;
   }

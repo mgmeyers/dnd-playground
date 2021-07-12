@@ -293,6 +293,8 @@ export function useDragHandle(
       e.stopPropagation();
       e.preventDefault();
 
+      console.log('pointerdown')
+
       let isDragging = true;
 
       dndManager.dragManager.dragStart(e, droppable);
@@ -303,6 +305,7 @@ export function useDragHandle(
 
       const onEnd = (e: PointerEvent) => {
         isDragging = false;
+        console.log('pointerup or cancel')
 
         dndManager.dragManager.dragEnd(e);
 

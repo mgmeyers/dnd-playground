@@ -6,6 +6,16 @@ import { getSiblingDirection, SiblingDirection } from "../util/path";
 
 type EntityAndElement = [Entity, HTMLElement];
 
+interface Dimensions {
+  width: number;
+  height: number;
+}
+
+const emptyDimensions: Dimensions = {
+  width: 0,
+  height: 0,
+};
+
 export const dragLeaveDebounceLength = 100;
 
 export class SortManager {
@@ -47,6 +57,8 @@ export class SortManager {
     this.sortables.delete(id);
   }
 
+  hitboxDimensions = emptyDimensions;
+
   handleDragStart = ({ dragEntity, dragEntityMargin }: DragEventData) => {
     const id = dragEntity?.getData().id;
     const haveSortable = id ? this.sortables.has(id) : null;
@@ -54,6 +66,15 @@ export class SortManager {
     if (!dragEntity || !haveSortable) {
       return;
     }
+
+    console.log("SM: drag start");
+
+    this.isSorting = true;
+
+    this.hitboxDimensions = this.getHitboxDimensions(
+      dragEntity.initial,
+      dragEntityMargin
+    );
 
     this.sortables.forEach(([entity, el]) => {
       const siblingDirection = getSiblingDirection(
@@ -70,24 +91,26 @@ export class SortManager {
           this.shifted.add(entityId);
         }
 
-        this.shiftEl(
-          el,
-          transitions.none,
-          this.getHitboxDimensions(dragEntity.initial, dragEntityMargin)
-        );
+        this.shiftEl(el, transitions.none, this.hitboxDimensions);
       }
     });
   };
 
   private dragEndTimeout = 0;
-  handleDragEnd = ({ primaryIntersection, dragPosition }: DragEventData) => {
-    clearTimeout(this.dragLeaveTimeout);
-
-    if (!this.isSorting || !primaryIntersection || !dragPosition) {
+  handleDragEnd = ({
+    primaryIntersection,
+    dragPosition,
+    dragOriginHitbox,
+  }: DragEventData) => {
+    if (!this.isSorting || !dragPosition || !dragOriginHitbox) {
       return;
     }
 
-    const dropHitbox = primaryIntersection.getHitbox();
+    clearTimeout(this.dragLeaveTimeout);
+
+    console.log("SM: drag end");
+
+    const dropHitbox = primaryIntersection?.getHitbox() || dragOriginHitbox;
     const dropDuration = getDropDuration({
       position: dragPosition,
       destination: {
@@ -97,18 +120,18 @@ export class SortManager {
     });
 
     this.dragEndTimeout = window.setTimeout(() => {
-      if (this.isSorting) {
-        this.isSorting = false;
-        this.sortables.forEach(([entity, el]) => {
-          const entityId = entity.getData().id;
+      this.isSorting = false;
+      this.sortables.forEach(([entity, el]) => {
+        const entityId = entity.getData().id;
 
-          if (this.shifted.has(entityId)) {
-            this.shifted.delete(entityId);
-            this.resetEl(el);
-          }
-        });
-      }
+        if (this.shifted.has(entityId)) {
+          this.shifted.delete(entityId);
+          this.resetEl(el);
+        }
+      });
     }, dropDuration);
+
+    this.hitboxDimensions = emptyDimensions;
   };
 
   handleDragEnter = ({
@@ -126,6 +149,10 @@ export class SortManager {
     clearTimeout(this.dragLeaveTimeout);
 
     this.isSorting = true;
+    this.hitboxDimensions = this.getHitboxDimensions(
+      dragEntity.initial,
+      dragEntityMargin
+    );
     this.sortables.forEach(([entity, el]) => {
       const siblingDirection = getSiblingDirection(
         primaryIntersection.getPath(),
@@ -142,11 +169,7 @@ export class SortManager {
           this.shifted.add(entityId);
         }
 
-        this.shiftEl(
-          el,
-          transitions.outOfTheWay,
-          this.getHitboxDimensions(dragEntity.initial, dragEntityMargin)
-        );
+        this.shiftEl(el, transitions.outOfTheWay, this.hitboxDimensions);
       } else if (this.shifted.has(entityId)) {
         this.shifted.delete(entityId);
         this.resetEl(el);
@@ -160,18 +183,18 @@ export class SortManager {
 
     clearTimeout(this.dragLeaveTimeout);
     this.dragLeaveTimeout = window.setTimeout(() => {
-      if (this.isSorting) {
-        this.isSorting = false;
-        this.sortables.forEach(([entity, el]) => {
-          const entityId = entity.getData().id;
+      this.isSorting = false;
+      this.sortables.forEach(([entity, el]) => {
+        const entityId = entity.getData().id;
 
-          if (this.shifted.has(entityId)) {
-            this.shifted.delete(entityId);
-            this.resetEl(el);
-          }
-        });
-      }
+        if (this.shifted.has(entityId)) {
+          this.shifted.delete(entityId);
+          this.resetEl(el);
+        }
+      });
     }, dragLeaveDebounceLength);
+
+    this.hitboxDimensions = emptyDimensions;
   };
 
   getHitboxDimensions(hitbox: Hitbox, margin: Hitbox = [0, 0, 0, 0]) {
