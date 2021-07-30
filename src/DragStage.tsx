@@ -5,11 +5,11 @@ import { DndContext } from "./components/DndContext";
 import { DragOverlay } from "./components/DragOverlay";
 import { Scrollable } from "./components/Scrollable";
 import { Droppable } from "./components/Droppable";
-import { EntityData } from "./types";
+import { EntityData, Item, Lane } from "./types";
 import { useDragHandle } from "./managers/DragManager";
 import { Sortable } from "./components/Sortable";
 import { SortPlaceholder } from "./components/SortPlaceholder";
-import { Debug, DebugScrollContainers } from "./Debug";
+// import { Debug, DebugScrollContainers } from "./Debug";
 
 export function DragStage() {
   const [board, setBoard] = React.useState({
@@ -19,17 +19,21 @@ export function DragStage() {
     accepts: ["lane"],
     data: {},
   });
+
   // TODO: move this work into the scroll container via React.memo comparators
   const boardScrollTiggers = React.useRef(["lane", "item"]);
-  const laneScrollTiggers = React.useRef(["item"]);
   const lanePlaceholderTigger = React.useRef(["lane"]);
 
   return (
     <DndContext
       onDrop={(dragEntity, dropEntity) => {
-        setBoard((board) =>
-          moveEntity(board, dragEntity.getPath(), dropEntity.getPath())
+        const newBoard = moveEntity(
+          board,
+          dragEntity.getPath(),
+          dropEntity.getPath()
         );
+
+        setBoard(newBoard);
       }}
       id="1"
     >
@@ -41,45 +45,7 @@ export function DragStage() {
             triggerTypes={boardScrollTiggers.current}
           >
             <Sortable axis="horizontal">
-              {board.children.map((lane, i) => {
-                return (
-                  <DragDroppableContainer
-                    className="lane"
-                    data={lane}
-                    id={lane.id}
-                    index={i}
-                    key={lane.id}
-                  >
-                    <div className="lane-title">
-                      {lane.id}: {lane.data.title}
-                    </div>
-                    <ScrollContainer
-                      className="lane-items vertical"
-                      triggerTypes={laneScrollTiggers.current}
-                    >
-                      <Sortable axis="vertical">
-                        {lane.children.map((item, i) => {
-                          return (
-                            <DragDroppableContainer
-                              className="item"
-                              data={item}
-                              id={item.id}
-                              index={i}
-                              key={item.id}
-                            >
-                              {item.id}: {item.data.title}
-                            </DragDroppableContainer>
-                          );
-                        })}
-                        <SortPlaceholder
-                          accepts={laneScrollTiggers.current}
-                          index={lane.children.length}
-                        />
-                      </Sortable>
-                    </ScrollContainer>
-                  </DragDroppableContainer>
-                );
-              })}
+              <Lanes lanes={board.children} />
               <SortPlaceholder
                 accepts={lanePlaceholderTigger.current}
                 index={TEST_BOARD.length}
@@ -102,6 +68,81 @@ export function DragStage() {
     </DndContext>
   );
 }
+
+const Items = React.memo(function Items({ items }: { items: Item[] }) {
+  return (
+    <>
+      {items.map((item, i) => {
+        return <ItemComponent item={item} itemIndex={i} key={item.id} />;
+      })}
+    </>
+  );
+});
+
+const ItemComponent = React.memo(function ItemComponent({
+  item,
+  itemIndex,
+}: {
+  item: Item;
+  itemIndex: number;
+}) {
+  return (
+    <DragDroppableContainer
+      className="item"
+      data={item}
+      id={item.id}
+      index={itemIndex}
+    >
+      {item.id}: {item.data.title}
+    </DragDroppableContainer>
+  );
+});
+
+const Lanes = React.memo(function Lanes({ lanes }: { lanes: Lane[] }) {
+  return (
+    <>
+      {lanes.map((lane, i) => {
+        return <LaneComponent lane={lane} laneIndex={i} key={lane.id} />;
+      })}
+    </>
+  );
+});
+
+const LaneComponent = React.memo(function LaneComponent({
+  lane,
+  laneIndex,
+}: {
+  lane: Lane;
+  laneIndex: number;
+}) {
+  const laneScrollTiggers = React.useRef(["item"]);
+
+  return (
+    <DragDroppableContainer
+      className="lane"
+      data={lane}
+      id={lane.id}
+      index={laneIndex}
+      key={lane.id}
+    >
+      <div className="lane-title">
+        {lane.id}: {lane.data.title}
+      </div>
+      <ScrollContainer
+        className="lane-items vertical"
+        triggerTypes={laneScrollTiggers.current}
+      >
+        <Sortable axis="vertical">
+          <Items items={lane.children} />
+          <SortPlaceholder
+            accepts={laneScrollTiggers.current}
+            index={lane.children.length}
+          />
+        </Sortable>
+      </ScrollContainer>
+    </DragDroppableContainer>
+  );
+});
 
 interface ScrollContainerProps {
   children?: React.ReactNode;

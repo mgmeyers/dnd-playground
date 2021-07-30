@@ -55,7 +55,7 @@ export function buildRemoveMutation(path: Path) {
     },
   };
 
-  for (let i = path.length - 3; i >= 0; i -= 2) {
+  for (let i = path.length - 2; i >= 0; i--) {
     mutation = {
       children: {
         [path[i]]: mutation,
@@ -77,7 +77,7 @@ export function buildInsertMutation(
   let destinationModifier = 1;
 
   if (inSameList && source && source[len - 1] < destination[len - 1]) {
-    destinationModifier = 3;
+    destinationModifier = 2;
   }
 
   let mutation: Spec<Nestable> = {
@@ -86,7 +86,7 @@ export function buildInsertMutation(
     },
   };
 
-  for (let i = destination.length - 3; i >= 0; i -= 2) {
+  for (let i = destination.length - 2; i >= 0; i--) {
     mutation = {
       children: {
         [destination[i]]: mutation,
@@ -101,7 +101,7 @@ export function getEntityFromPath(root: Nestable, path: Path): Nestable {
   const step = !!path.length && path[0];
 
   if (step !== false && root.children && root.children[step]) {
-    return getEntityFromPath(root.children[step], path.slice(2));
+    return getEntityFromPath(root.children[step], path.slice(1));
   }
 
   return root;
@@ -113,8 +113,7 @@ export function moveEntity(root: Nestable, source: Path, destination: Path) {
   const insertMutation = buildInsertMutation(source, destination, entity);
 
   const updates = merge(removeMutation, insertMutation)
-  console.log(updates)
-  
+
   return update(root, updates);
 }
 

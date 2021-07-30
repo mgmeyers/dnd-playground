@@ -127,11 +127,6 @@ export class SortManager {
         primaryIntersection &&
         primaryIntersection.getData().id !== dragEntity.getData().id
       ) {
-        console.log(
-          "performing drop",
-          dragEntity.getData(),
-          primaryIntersection.getData()
-        );
         this.dndManager.onDrop(dragEntity, primaryIntersection);
       }
 
