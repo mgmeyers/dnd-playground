@@ -1,5 +1,8 @@
 import { LoremIpsum } from "lorem-ipsum";
-import { Item, Lane } from "../types";
+import { Item, Lane, Nestable, Path } from "../types";
+import update, { Spec } from "immutability-helper";
+import { areSiblings } from "./path";
+import merge from "deepmerge";
 
 export function generateInstanceId(): string {
   return Math.random().toString(36).substr(2, 9);
@@ -44,3 +47,85 @@ function generateLanes(n: number) {
 }
 
 export const TEST_BOARD = generateLanes(8);
+
+export function buildRemoveMutation(path: Path) {
+  let mutation: Spec<Nestable> = {
+    children: {
+      $splice: [[path[path.length - 1], 1]],
+    },
+  };
+
+  for (let i = path.length - 3; i >= 0; i -= 2) {
+    mutation = {
+      children: {
+        [path[i]]: mutation,
+      },
+    };
+  }
+
+  return mutation;
+}
+
+export function buildInsertMutation(
+  source: Path | null,
+  destination: Path,
+  entity: Nestable
+) {
+  const inSameList = source && areSiblings(source, destination);
+  const len = destination.length;
+
+  let destinationModifier = 1;
+
+  if (inSameList && source && source[len - 1] < destination[len - 1]) {
+    destinationModifier = 3;
+  }
+
+  let mutation: Spec<Nestable> = {
+    children: {
+      $splice: [[destination[len - destinationModifier], 0, entity]],
+    },
+  };
+
+  for (let i = destination.length - 3; i >= 0; i -= 2) {
+    mutation = {
+      children: {
+        [destination[i]]: mutation,
+      },
+    };
+  }
+
+  return mutation;
+}
+
+export function getEntityFromPath(root: Nestable, path: Path): Nestable {
+  const step = !!path.length && path[0];
+
+  if (step !== false && root.children && root.children[step]) {
+    return getEntityFromPath(root.children[step], path.slice(2));
+  }
+
+  return root;
+}
+
+export function moveEntity(root: Nestable, source: Path, destination: Path) {
+  const entity = getEntityFromPath(root, source);
+  const removeMutation = buildRemoveMutation(source);
+  const insertMutation = buildInsertMutation(source, destination, entity);
+
+  const updates = merge(removeMutation, insertMutation)
+  console.log(updates)
+  
+  return update(root, updates);
+}
+
+export function removeEntity(root: Nestable, target: Path) {
+  return update(root, buildRemoveMutation(target));
+}
+
+export function insertEntity(
+  root: Nestable,
+  destination: Path,
+  entity: Nestable
+) {
+  return update(root, buildInsertMutation(null, destination, entity));
+}

@@ -266,10 +266,17 @@ export function closestCenter(entities: Entity[], target: Hitbox) {
   return entities[minValueIndex] ? entities[minValueIndex] : null;
 }
 
-export function getBestIntersect(hits: Entity[], dragHitbox: Hitbox) {
+export function getBestIntersect(
+  hits: Entity[],
+  dragHitbox: Hitbox,
+  dragId: string
+) {
   const dragTopLeft = cornersOfRectangle(dragHitbox)[0];
-
   const distances = hits.map((entity) => {
+    if (entity.getData().id === dragId) {
+      return 10000000;
+    }
+
     const entityHitbox = entity.getHitbox();
     const entityTopLeft = cornersOfRectangle(entityHitbox)[0];
     const entityCenter = centerOfRectangle(dragHitbox);

@@ -1,4 +1,3 @@
-import rafSchd from "raf-schd";
 import { generateInstanceId } from "../util/data";
 import {
   adjustHitbox,
@@ -96,7 +95,10 @@ export class ScrollManager {
       passive: true,
       capture: false,
     });
-    this.onScroll();
+
+    setTimeout(() => {
+      this.onScroll();
+    })
 
     this.dndManager.observeResize(this.scrollEl);
 
@@ -206,10 +208,10 @@ export class ScrollManager {
     this.dndManager.dragManager.emitter.off("dragEnd", this.onDragEnd);
   }
 
-  onScroll = rafSchd(() => {
+  onScroll = () => {
     this.scrollState = getElementScrollOffsets(this.scrollEl);
     this.handleEntityRegistration();
-  });
+  };
 
   onDragEnd = () => {
     this.activeScroll.clear();

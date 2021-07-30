@@ -3,17 +3,21 @@ import { createEmitter, Emitter } from "../util/emitter";
 import { Entity } from "../types";
 import { DragManager } from "./DragManager";
 
+export type DropHandler = (dragEntity: Entity, dropEntity: Entity) => void;
+
 export class DndManager {
   emitter: Emitter;
   hitboxEntities: Map<string, Entity>;
   scrollEntities: Map<string, Entity>;
   resizeObserver: ResizeObserver;
   dragManager: DragManager;
+  onDrop: DropHandler
 
-  constructor() {
+  constructor(onDrop: DropHandler) {
     this.emitter = createEmitter();
     this.hitboxEntities = new Map();
     this.scrollEntities = new Map();
+    this.onDrop = onDrop
 
     this.resizeObserver = new ResizeObserver(
       debounce(100, () => {

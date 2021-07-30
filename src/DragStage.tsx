@@ -1,6 +1,6 @@
 import React from "react";
 import classcat from "classcat";
-import { TEST_BOARD } from "./util/data";
+import { moveEntity, TEST_BOARD } from "./util/data";
 import { DndContext } from "./components/DndContext";
 import { DragOverlay } from "./components/DragOverlay";
 import { Scrollable } from "./components/Scrollable";
@@ -12,13 +12,27 @@ import { SortPlaceholder } from "./components/SortPlaceholder";
 import { Debug, DebugScrollContainers } from "./Debug";
 
 export function DragStage() {
+  const [board, setBoard] = React.useState({
+    children: TEST_BOARD,
+    id: "board",
+    type: "board",
+    accepts: ["lane"],
+    data: {},
+  });
   // TODO: move this work into the scroll container via React.memo comparators
   const boardScrollTiggers = React.useRef(["lane", "item"]);
   const laneScrollTiggers = React.useRef(["item"]);
   const lanePlaceholderTigger = React.useRef(["lane"]);
 
   return (
-    <DndContext id="1">
+    <DndContext
+      onDrop={(dragEntity, dropEntity) => {
+        setBoard((board) =>
+          moveEntity(board, dragEntity.getPath(), dropEntity.getPath())
+        );
+      }}
+      id="1"
+    >
       <div className="app">
         <div className="app-header">Lorem Ipsum</div>
         <div className="app-body">
@@ -27,7 +41,7 @@ export function DragStage() {
             triggerTypes={boardScrollTiggers.current}
           >
             <Sortable axis="horizontal">
-              {TEST_BOARD.map((lane, i) => {
+              {board.children.map((lane, i) => {
                 return (
                   <DragDroppableContainer
                     className="lane"
@@ -83,8 +97,8 @@ export function DragStage() {
           </>
         )}
       </DragOverlay>
-      <Debug />
-      <DebugScrollContainers />
+      {/* <Debug />
+      <DebugScrollContainers /> */}
     </DndContext>
   );
 }

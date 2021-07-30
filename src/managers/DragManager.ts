@@ -93,9 +93,9 @@ export class DragManager {
     this.dragEntity = this.hitboxEntities.get(id);
     this.dragOriginHitbox = this.dragEntity?.getHitbox();
     this.dragEntityMargin = [
-      parseFloat(styles.marginRight) || 0,
-      parseFloat(styles.marginTop) || 0,
       parseFloat(styles.marginLeft) || 0,
+      parseFloat(styles.marginTop) || 0,
+      parseFloat(styles.marginRight) || 0,
       parseFloat(styles.marginBottom) || 0,
     ];
 
@@ -130,7 +130,7 @@ export class DragManager {
       return;
     }
 
-    const { type } = this.dragEntity.getData();
+    const { type, id } = this.dragEntity.getData();
 
     const hitboxEntities: Entity[] = [];
     const hitboxHitboxes: Hitbox[] = [];
@@ -157,7 +157,7 @@ export class DragManager {
       this.dragPosition
     );
 
-    this.handleHitboxIntersect(dragHitbox, hitboxHitboxes, hitboxEntities);
+    this.handleHitboxIntersect(dragHitbox, id, hitboxHitboxes, hitboxEntities);
     this.handleScrollIntersect(dragHitbox, scrollHitboxes, scrollEntities);
   }
 
@@ -239,6 +239,7 @@ export class DragManager {
 
   handleHitboxIntersect(
     dragHitbox: Hitbox,
+    dragId: string,
     hitboxes: Hitbox[],
     hitboxEntities: Entity[]
   ) {
@@ -246,7 +247,7 @@ export class DragManager {
       (match) => hitboxEntities[match[1]]
     );
 
-    const primaryIntersection = getBestIntersect(hits, dragHitbox);
+    const primaryIntersection = getBestIntersect(hits, dragHitbox, dragId);
 
     if (
       this.primaryIntersection &&
@@ -293,8 +294,6 @@ export function useDragHandle(
       e.stopPropagation();
       e.preventDefault();
 
-      console.log('pointerdown')
-
       let isDragging = true;
 
       dndManager.dragManager.dragStart(e, droppable);
@@ -305,7 +304,6 @@ export function useDragHandle(
 
       const onEnd = (e: PointerEvent) => {
         isDragging = false;
-        console.log('pointerup or cancel')
 
         dndManager.dragManager.dragEnd(e);
 

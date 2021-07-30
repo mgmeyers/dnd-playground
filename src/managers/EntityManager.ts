@@ -11,18 +11,23 @@ import { ScrollManager } from "./ScrollManager";
 import { SortManager } from "./SortManager";
 import { DndManager } from "./DndManager";
 
+interface Child {
+  manager: EntityManager;
+  entity: Entity;
+}
+
 export class EntityManager {
+  children: Map<string, Child>;
   dndManager: DndManager;
+  entityNode: HTMLElement;
+  getEntityData: () => EntityData;
   id: string;
   index: number;
-  scopeId: string;
-  children: Map<string, Entity>;
   parent: EntityManager | null;
+  scopeId: string;
   scrollParent: ScrollManager | null;
   sortManager: SortManager | null;
-  getEntityData: () => EntityData;
-
-  entityNode: HTMLElement;
+  isVisible: boolean = false;
 
   constructor(
     dndManager: DndManager,
@@ -53,12 +58,20 @@ export class EntityManager {
       this.scrollParent.registerObserverHandler(id, entityNode, (entry) => {
         if (entry.isIntersecting) {
           const entity = this.getEntity(entry.boundingClientRect);
-          dndManager.registerHitboxEntity(id, entity);
-          this.children.forEach((child, childId) => {
-            dndManager.registerHitboxEntity(childId, child);
+          parent?.children.set(id, {
+            entity,
+            manager: this,
           });
-          parent?.children.set(id, entity);
+
           dndManager.observeResize(entityNode);
+
+          if (!parent || parent.isVisible) {
+            dndManager.registerHitboxEntity(id, entity);
+            this.children.forEach((child, childId) => {
+              dndManager.registerHitboxEntity(childId, child.entity);
+            });
+            this.setVisibility(true);
+          }
         } else {
           dndManager.unregisterHitboxEntity(id);
           this.children.forEach((_, childId) => {
@@ -66,14 +79,26 @@ export class EntityManager {
           });
           parent?.children.delete(id);
           dndManager.unobserveResize(entityNode);
+          this.setVisibility(false);
         }
       });
     } else {
       const entity = this.getEntity(entityNode.getBoundingClientRect());
       dndManager.observeResize(entityNode);
       dndManager.registerHitboxEntity(id, entity);
-      parent?.children.set(id, entity);
+      parent?.children.set(id, {
+        entity,
+        manager: this,
+      });
+      this.setVisibility(true);
     }
+  }
+
+  setVisibility(isVisible: boolean) {
+    this.isVisible = isVisible;
+    this.children.forEach((child) => {
+      child.manager.setVisibility(isVisible);
+    });
   }
 
   destroy() {

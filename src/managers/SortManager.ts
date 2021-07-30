@@ -22,6 +22,7 @@ export class SortManager {
   dndManager: DndManager;
   sortables: Map<string, EntityAndElement>;
   shifted: Set<string>;
+  hidden: Set<string>;
   isSorting: boolean;
   axis: Axis;
 
@@ -29,6 +30,7 @@ export class SortManager {
     this.dndManager = dndManager;
     this.sortables = new Map();
     this.shifted = new Set();
+    this.hidden = new Set();
     this.isSorting = false;
     this.axis = axis;
 
@@ -61,13 +63,11 @@ export class SortManager {
 
   handleDragStart = ({ dragEntity, dragEntityMargin }: DragEventData) => {
     const id = dragEntity?.getData().id;
-    const haveSortable = id ? this.sortables.has(id) : null;
+    const haveDragEntity = id ? this.sortables.has(id) : null;
 
-    if (!dragEntity || !haveSortable) {
+    if (!dragEntity || !haveDragEntity) {
       return;
     }
-
-    console.log("SM: drag start");
 
     this.isSorting = true;
 
@@ -83,10 +83,12 @@ export class SortManager {
       );
       const entityId = entity.getData().id;
 
-      if (
-        siblingDirection === SiblingDirection.After ||
-        siblingDirection === SiblingDirection.Self
-      ) {
+      if (siblingDirection === SiblingDirection.Self) {
+        this.hidden.add(entityId);
+        return this.placeholdEl(el);
+      }
+
+      if (siblingDirection === SiblingDirection.After) {
         if (!this.shifted.has(entityId)) {
           this.shifted.add(entityId);
         }
@@ -101,14 +103,13 @@ export class SortManager {
     primaryIntersection,
     dragPosition,
     dragOriginHitbox,
+    dragEntity,
   }: DragEventData) => {
-    if (!this.isSorting || !dragPosition || !dragOriginHitbox) {
+    if (!this.isSorting || !dragPosition || !dragOriginHitbox || !dragEntity) {
       return;
     }
 
     clearTimeout(this.dragLeaveTimeout);
-
-    console.log("SM: drag end");
 
     const dropHitbox = primaryIntersection?.getHitbox() || dragOriginHitbox;
     const dropDuration = getDropDuration({
@@ -121,12 +122,30 @@ export class SortManager {
 
     this.dragEndTimeout = window.setTimeout(() => {
       this.isSorting = false;
+
+      if (
+        primaryIntersection &&
+        primaryIntersection.getData().id !== dragEntity.getData().id
+      ) {
+        console.log(
+          "performing drop",
+          dragEntity.getData(),
+          primaryIntersection.getData()
+        );
+        this.dndManager.onDrop(dragEntity, primaryIntersection);
+      }
+
       this.sortables.forEach(([entity, el]) => {
         const entityId = entity.getData().id;
 
         if (this.shifted.has(entityId)) {
           this.shifted.delete(entityId);
-          this.resetEl(el);
+          return this.resetEl(el, transitions.none);
+        }
+
+        if (this.hidden.has(entityId)) {
+          this.hidden.delete(entityId);
+          this.resetEl(el, transitions.none);
         }
       });
     }, dropDuration);
@@ -146,6 +165,10 @@ export class SortManager {
       return;
     }
 
+    if (dragEntity.getData().id === primaryIntersection.getData().id) {
+      return;
+    }
+
     clearTimeout(this.dragLeaveTimeout);
 
     this.isSorting = true;
@@ -162,8 +185,9 @@ export class SortManager {
       const entityId = entity.getData().id;
 
       if (
-        siblingDirection === SiblingDirection.After ||
-        siblingDirection === SiblingDirection.Self
+        !this.hidden.has(entityId) &&
+        (siblingDirection === SiblingDirection.Self ||
+          siblingDirection === SiblingDirection.After)
       ) {
         if (!this.shifted.has(entityId)) {
           this.shifted.add(entityId);
@@ -203,6 +227,10 @@ export class SortManager {
     return { width, height };
   }
 
+  placeholdEl(el: HTMLElement) {
+    el.style.setProperty("display", "none");
+  }
+
   shiftEl(
     el: HTMLElement,
     transition: string,
@@ -217,8 +245,9 @@ export class SortManager {
     );
   }
 
-  resetEl(el: HTMLElement) {
-    el.style.setProperty("transition", transitions.outOfTheWay);
+  resetEl(el: HTMLElement, transition: string = transitions.outOfTheWay) {
+    el.style.setProperty("transition", transition);
     el.style.removeProperty("transform");
+    el.style.removeProperty("display");
   }
 }
