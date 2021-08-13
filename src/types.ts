@@ -63,7 +63,7 @@ export interface Entity {
 }
 
 export interface WithChildren {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 export const initialScrollState: ScrollState = {

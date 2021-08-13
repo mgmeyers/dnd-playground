@@ -79,7 +79,7 @@ export function DragStage() {
           return <div />;
         }}
       </DragOverlay>
-      {/* <Debug /> */}
+      <Debug />
       {/* <DebugScrollContainers /> */}
     </DndContext>
   );

@@ -25,6 +25,7 @@ export class SortManager {
   hidden: Set<string>;
   isSorting: boolean;
   axis: Axis;
+  placeholder: EntityAndElement | null;
 
   constructor(dndManager: DndManager, axis: Axis) {
     this.dndManager = dndManager;
@@ -33,6 +34,7 @@ export class SortManager {
     this.hidden = new Set();
     this.isSorting = false;
     this.axis = axis;
+    this.placeholder = null;
 
     dndManager.dragManager.emitter.on("dragStart", this.handleDragStart);
     dndManager.dragManager.emitter.on("dragEnd", this.handleDragEnd);
@@ -58,6 +60,10 @@ export class SortManager {
   ) {
     el.style.setProperty("transition", transitions.none);
     this.sortables.set(id, [entity, el, measureEl]);
+
+    if (entity.getData().type === "placeholder") {
+      this.placeholder = [entity, el, measureEl];
+    }
   }
 
   unregisterSortable(id: string) {
@@ -84,6 +90,8 @@ export class SortManager {
       dragOriginHitbox,
       dragEntityMargin
     );
+
+    this.activatePlaceholder(this.hitboxDimensions);
 
     this.sortables.forEach(([entity, el, measureEl]) => {
       const siblingDirection = getSiblingDirection(
@@ -133,6 +141,7 @@ export class SortManager {
 
     this.dragEndTimeout = window.setTimeout(() => {
       this.isSorting = false;
+      this.deactivatePlaceholder();
 
       if (
         primaryIntersection &&
@@ -191,6 +200,7 @@ export class SortManager {
         dragOriginHitbox,
         dragEntityMargin
       );
+      this.activatePlaceholder(this.hitboxDimensions);
       this.sortables.forEach(([entity, el]) => {
         const siblingDirection = getSiblingDirection(
           primaryIntersection.getPath(),
@@ -225,6 +235,7 @@ export class SortManager {
     clearTimeout(this.dragEnterTimeout);
     this.dragLeaveTimeout = window.setTimeout(() => {
       this.isSorting = false;
+      this.deactivatePlaceholder();
       this.sortables.forEach(([entity, el]) => {
         const entityId = entity.getData().id;
 
@@ -242,6 +253,22 @@ export class SortManager {
     const height = hitbox[3] + margin[3] - hitbox[1] - margin[1];
     const width = hitbox[2] + margin[2] - hitbox[0] - margin[0];
     return { width, height };
+  }
+
+  activatePlaceholder({ width, height }: { width: number; height: number }) {
+    if (this.placeholder) {
+      const [, , measure] = this.placeholder;
+      measure.style.setProperty("width", `${width}px`);
+      measure.style.setProperty("height", `${height}px`);
+    }
+  }
+
+  deactivatePlaceholder() {
+    if (this.placeholder) {
+      const [, , measure] = this.placeholder;
+      measure.style.removeProperty("width");
+      measure.style.removeProperty("height");
+    }
   }
 
   placeholdEl(el: HTMLElement) {

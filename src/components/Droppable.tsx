@@ -53,6 +53,8 @@ export function Droppable({
 
       setEntityManager(manager);
       return () => manager.destroy();
+    } else {
+      console.log('missing something for', elementRef.current)
     }
   }, [
     id,
