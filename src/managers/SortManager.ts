@@ -118,6 +118,7 @@ export class SortManager {
       return;
     }
 
+    clearTimeout(this.dragEnterTimeout);
     clearTimeout(this.dragLeaveTimeout);
     clearTimeout(this.dragEndTimeout);
 
@@ -153,11 +154,12 @@ export class SortManager {
           this.resetEl(measure, transitions.none);
         }
       });
-    }, dropDuration);
+    }, dropDuration - 1);
 
     this.hitboxDimensions = emptyDimensions;
   };
 
+  private dragEnterTimeout = 0;
   handleDragEnter = ({
     dragEntity,
     dragEntityMargin,
@@ -181,35 +183,38 @@ export class SortManager {
     }
 
     clearTimeout(this.dragLeaveTimeout);
+    clearTimeout(this.dragEnterTimeout);
 
-    this.isSorting = true;
-    this.hitboxDimensions = this.getHitboxDimensions(
-      dragOriginHitbox,
-      dragEntityMargin
-    );
-    this.sortables.forEach(([entity, el]) => {
-      const siblingDirection = getSiblingDirection(
-        primaryIntersection.getPath(),
-        entity.getPath()
+    this.dragEnterTimeout = window.setTimeout(() => {
+      this.isSorting = true;
+      this.hitboxDimensions = this.getHitboxDimensions(
+        dragOriginHitbox,
+        dragEntityMargin
       );
+      this.sortables.forEach(([entity, el]) => {
+        const siblingDirection = getSiblingDirection(
+          primaryIntersection.getPath(),
+          entity.getPath()
+        );
 
-      const entityId = entity.getData().id;
+        const entityId = entity.getData().id;
 
-      if (
-        !this.hidden.has(entityId) &&
-        (siblingDirection === SiblingDirection.Self ||
-          siblingDirection === SiblingDirection.After)
-      ) {
-        if (!this.shifted.has(entityId)) {
-          this.shifted.add(entityId);
+        if (
+          !this.hidden.has(entityId) &&
+          (siblingDirection === SiblingDirection.Self ||
+            siblingDirection === SiblingDirection.After)
+        ) {
+          if (!this.shifted.has(entityId)) {
+            this.shifted.add(entityId);
+          }
+
+          this.shiftEl(el, transitions.outOfTheWay, this.hitboxDimensions);
+        } else if (this.shifted.has(entityId)) {
+          this.shifted.delete(entityId);
+          this.resetEl(el);
         }
-
-        this.shiftEl(el, transitions.outOfTheWay, this.hitboxDimensions);
-      } else if (this.shifted.has(entityId)) {
-        this.shifted.delete(entityId);
-        this.resetEl(el);
-      }
-    });
+      });
+    }, 10);
   };
 
   private dragLeaveTimeout = 0;
@@ -217,6 +222,7 @@ export class SortManager {
     if (!this.isSorting) return;
 
     clearTimeout(this.dragLeaveTimeout);
+    clearTimeout(this.dragEnterTimeout);
     this.dragLeaveTimeout = window.setTimeout(() => {
       this.isSorting = false;
       this.sortables.forEach(([entity, el]) => {

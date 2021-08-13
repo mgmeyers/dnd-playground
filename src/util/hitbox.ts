@@ -178,19 +178,27 @@ export function getScrollIntersection(
     const side = e.getData().side as Side;
     const hitbox = e.getHitbox();
 
-    let index = 0;
+    let targetIndex = 0;
+    let hitboxIndex = 0;
 
     if (side === "left") {
-      index = 0;
+      targetIndex = 0;
+      hitboxIndex = 2;
     } else if (side === "right") {
-      index = 2;
+      targetIndex = 2;
+      hitboxIndex = 0;
     } else if (side === "top") {
-      index = 1;
+      targetIndex = 1;
+      hitboxIndex = 3;
     } else if (side === "bottom") {
-      index = 3;
+      targetIndex = 3;
+      hitboxIndex = 1;
     }
 
-    return [e, Math.abs(target[index] - hitbox[index])];
+    const distance = Math.abs(target[targetIndex] - hitbox[hitboxIndex]);
+    const max = Math.abs(hitbox[targetIndex] - hitbox[hitboxIndex]);
+
+    return [e, max - distance];
   });
 }
 

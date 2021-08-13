@@ -45,7 +45,7 @@ function generateLanes(n: number) {
   return lanes;
 }
 
-export const TEST_BOARD = generateLanes(2);
+export const TEST_BOARD = generateLanes(8);
 
 export function buildRemoveMutation(path: Path) {
   let mutation: Spec<Nestable> = {

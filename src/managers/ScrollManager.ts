@@ -203,8 +203,10 @@ export class ScrollManager {
   }
 
   onScroll = () => {
-    this.scrollState = getElementScrollOffsets(this.scrollEl);
-    this.handleEntityRegistration();
+    if (this.activeScroll.size === 0) {
+      this.scrollState = getElementScrollOffsets(this.scrollEl);
+      this.handleEntityRegistration();
+    }
   };
 
   onDragEnd = () => {
@@ -272,6 +274,8 @@ export class ScrollManager {
       });
 
       this.scrollEl.scrollBy(scrollBy);
+      this.scrollState = getElementScrollOffsets(this.scrollEl);
+      this.handleEntityRegistration();
       this.handleDragScroll();
     });
   }
