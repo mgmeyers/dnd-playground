@@ -1,8 +1,7 @@
 import { LoremIpsum } from "lorem-ipsum";
 import { Item, Lane, Nestable, Path } from "../types";
 import update, { Spec } from "immutability-helper";
-import { areSiblings } from "./path";
-import merge from "deepmerge";
+import { getSiblingDirection, SiblingDirection } from "./path";
 
 export function generateInstanceId(): string {
   return Math.random().toString(36).substr(2, 9);
@@ -46,7 +45,7 @@ function generateLanes(n: number) {
   return lanes;
 }
 
-export const TEST_BOARD = generateLanes(8);
+export const TEST_BOARD = generateLanes(2);
 
 export function buildRemoveMutation(path: Path) {
   let mutation: Spec<Nestable> = {
@@ -67,22 +66,13 @@ export function buildRemoveMutation(path: Path) {
 }
 
 export function buildInsertMutation(
-  source: Path | null,
   destination: Path,
-  entity: Nestable
+  entity: Nestable,
+  destinationModifier: number = 0
 ) {
-  const inSameList = source && areSiblings(source, destination);
-  const len = destination.length;
-
-  let destinationModifier = 1;
-
-  if (inSameList && source && source[len - 1] < destination[len - 1]) {
-    destinationModifier = 2;
-  }
-
   let mutation: Spec<Nestable> = {
     children: {
-      $splice: [[destination[len - destinationModifier], 0, entity]],
+      $splice: [[destination[destination.length - 1] + destinationModifier, 0, entity]],
     },
   };
 
@@ -109,12 +99,14 @@ export function getEntityFromPath(root: Nestable, path: Path): Nestable {
 
 export function moveEntity(root: Nestable, source: Path, destination: Path) {
   const entity = getEntityFromPath(root, source);
+  const siblingDirection = getSiblingDirection(source, destination);
+
+  let destinationModifier = siblingDirection === SiblingDirection.After ? -1 : 0;
+
   const removeMutation = buildRemoveMutation(source);
-  const insertMutation = buildInsertMutation(source, destination, entity);
+  const insertMutation = buildInsertMutation(destination, entity, destinationModifier);
 
-  const updates = merge(removeMutation, insertMutation)
-
-  return update(root, updates);
+  return update(update(root, removeMutation), insertMutation);
 }
 
 export function removeEntity(root: Nestable, target: Path) {
@@ -126,5 +118,5 @@ export function insertEntity(
   destination: Path,
   entity: Nestable
 ) {
-  return update(root, buildInsertMutation(null, destination, entity));
+  return update(root, buildInsertMutation(destination, entity));
 }

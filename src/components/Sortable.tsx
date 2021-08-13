@@ -17,7 +17,9 @@ export function Sortable({ axis, children }: SortableProps) {
 
       setSortManager(manager);
 
-      return () => manager.destroy();
+      return () => {
+        setTimeout(() => { manager.destroy(); });
+      }
     }
   }, [dndManager, axis]);
 

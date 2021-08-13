@@ -23,6 +23,7 @@ export function SortPlaceholder({ index, accepts }: SortPlaceholderProps) {
   );
 
   const placeholderRef = React.useRef<HTMLDivElement>(null);
+  const measureRef = React.useRef<HTMLDivElement>(null);
 
   const data = React.useMemo<EntityData>(() => {
     return {
@@ -70,8 +71,16 @@ export function SortPlaceholder({ index, accepts }: SortPlaceholderProps) {
   }, [dndManager, id]);
 
   return (
-    <Droppable elementRef={placeholderRef} id={id} index={index} data={data}>
-      <div style={style} ref={placeholderRef} className="placeholder" />
+    <Droppable
+      elementRef={placeholderRef}
+      measureRef={measureRef}
+      id={id}
+      index={index}
+      data={data}
+    >
+      <div ref={measureRef}>
+        <div style={style} ref={placeholderRef} className="placeholder" />
+      </div>
     </Droppable>
   );
 }

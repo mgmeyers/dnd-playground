@@ -45,7 +45,7 @@ export function createEmitter<
       const scopedHandlers = this.events[scopedKey];
 
       if (!globalHandlers && !scopedHandlers) {
-        console.warn("Event emitted with no handler", event);
+        console.warn("Event emitted with no handler", event, id);
         return;
       }
 

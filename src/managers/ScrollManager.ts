@@ -23,6 +23,8 @@ export type IntersectionObserverHandler = (
 
 export const scrollContainerEntityType = "scroll-container";
 
+const sides: Side[] = ["top", "right", "bottom", "left"];
+
 export class ScrollManager {
   dndManager: DndManager;
   id: string;
@@ -66,10 +68,7 @@ export class ScrollManager {
     this.bottom = this.createScrollEntity("bottom");
     this.left = this.createScrollEntity("left");
 
-    this.bindScrollHandlers("top");
-    this.bindScrollHandlers("right");
-    this.bindScrollHandlers("bottom");
-    this.bindScrollHandlers("left");
+    this.bindScrollHandlers();
 
     this.observerHandlers = new Map();
     this.observer = new IntersectionObserver(
@@ -98,7 +97,7 @@ export class ScrollManager {
 
     setTimeout(() => {
       this.onScroll();
-    })
+    });
 
     this.dndManager.observeResize(this.scrollEl);
 
@@ -116,20 +115,15 @@ export class ScrollManager {
   }
 
   destroy() {
+    this.handleEntityUnregistration();
     this.observer.disconnect();
-    this.unbindScrollHandlers("top");
-    this.unbindScrollHandlers("right");
-    this.unbindScrollHandlers("bottom");
-    this.unbindScrollHandlers("left");
+    this.unbindScrollHandlers();
     this.scrollEl.removeEventListener("scroll", this.onScroll);
     this.parent?.unregisterObserverHandler(this.id, this.scrollEl);
     this.dndManager.unobserveResize(this.scrollEl);
-    this.handleEntityUnregistration();
   }
 
   handleEntityRegistration() {
-    const sides: Side[] = ["top", "right", "bottom", "left"];
-
     sides.forEach((side) => {
       const id = this.getId(side);
       const hasId = this.dndManager.scrollEntities.has(id);
@@ -144,13 +138,9 @@ export class ScrollManager {
   }
 
   handleEntityUnregistration() {
-    const sides: Side[] = ["top", "right", "bottom", "left"];
-
     sides.forEach((side) => {
       const id = this.getId(side);
-      if (this.dndManager.scrollEntities.has(id)) {
-        this.dndManager.unregisterScrollEntity(id);
-      }
+      this.dndManager.unregisterScrollEntity(id);
     });
   }
 
@@ -168,44 +158,48 @@ export class ScrollManager {
     this.observer.unobserve(element);
   }
 
-  bindScrollHandlers(side: Side) {
-    const id = `${this.id}-${side}`;
-    this.dndManager.dragManager.emitter.on(
-      "beginDragScroll",
-      this.handleBeginDragScroll,
-      id
-    );
-    this.dndManager.dragManager.emitter.on(
-      "updateDragScroll",
-      this.handleUpdateDragScroll,
-      id
-    );
-    this.dndManager.dragManager.emitter.on(
-      "endDragScroll",
-      this.handleEndDragScroll,
-      id
-    );
-    this.dndManager.dragManager.emitter.on("dragEnd", this.onDragEnd);
+  bindScrollHandlers() {
+    sides.forEach((side) => {
+      const id = this.getId(side);
+      this.dndManager.dragManager.emitter.on(
+        "beginDragScroll",
+        this.handleBeginDragScroll,
+        id
+      );
+      this.dndManager.dragManager.emitter.on(
+        "updateDragScroll",
+        this.handleUpdateDragScroll,
+        id
+      );
+      this.dndManager.dragManager.emitter.on(
+        "endDragScroll",
+        this.handleEndDragScroll,
+        id
+      );
+      this.dndManager.dragManager.emitter.on("dragEnd", this.onDragEnd);
+    });
   }
 
-  unbindScrollHandlers(side: Side) {
-    const id = `${this.id}-${side}`;
-    this.dndManager.dragManager.emitter.off(
-      "beginDragScroll",
-      this.handleBeginDragScroll,
-      id
-    );
-    this.dndManager.dragManager.emitter.off(
-      "updateDragScroll",
-      this.handleUpdateDragScroll,
-      id
-    );
-    this.dndManager.dragManager.emitter.off(
-      "endDragScroll",
-      this.handleEndDragScroll,
-      id
-    );
-    this.dndManager.dragManager.emitter.off("dragEnd", this.onDragEnd);
+  unbindScrollHandlers() {
+    sides.forEach((side) => {
+      const id = this.getId(side);
+      this.dndManager.dragManager.emitter.off(
+        "beginDragScroll",
+        this.handleBeginDragScroll,
+        id
+      );
+      this.dndManager.dragManager.emitter.off(
+        "updateDragScroll",
+        this.handleUpdateDragScroll,
+        id
+      );
+      this.dndManager.dragManager.emitter.off(
+        "endDragScroll",
+        this.handleEndDragScroll,
+        id
+      );
+      this.dndManager.dragManager.emitter.off("dragEnd", this.onDragEnd);
+    });
   }
 
   onScroll = () => {

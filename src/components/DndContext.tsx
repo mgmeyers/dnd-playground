@@ -10,13 +10,20 @@ interface DndContextProps extends WithChildren {
 }
 
 export function DndContext({ children, id, onDrop }: DndContextProps) {
+  const onDropRef = React.useRef(onDrop);
   const dndManager = React.useMemo(() => {
-    return new DndManager(onDrop);
-  }, [onDrop]);
+    return new DndManager((dragEntity: Entity, dropEntity: Entity) =>
+      onDropRef.current(dragEntity, dropEntity)
+    );
+  }, []);
 
   React.useEffect(() => {
-    return () => dndManager.destroy();
+    return () => {
+      dndManager.destroy();
+    };
   }, [dndManager]);
+
+  onDropRef.current = onDrop;
 
   return (
     <Scope id={id}>

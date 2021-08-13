@@ -11,25 +11,17 @@ export class DndManager {
   scrollEntities: Map<string, Entity>;
   resizeObserver: ResizeObserver;
   dragManager: DragManager;
-  onDrop: DropHandler
+  onDrop: DropHandler;
 
   constructor(onDrop: DropHandler) {
     this.emitter = createEmitter();
     this.hitboxEntities = new Map();
     this.scrollEntities = new Map();
-    this.onDrop = onDrop
+    this.onDrop = onDrop;
 
     this.resizeObserver = new ResizeObserver(
-      debounce(100, () => {
-        this.hitboxEntities.forEach((entity) => {
-          entity.recalcInitial();
-        });
-        this.scrollEntities.forEach((entity) => {
-          entity.recalcInitial();
-        });
-      })
+      debounce(100, this.recalcVisibleHitboxes)
     );
-
     this.dragManager = new DragManager(
       this.emitter,
       this.hitboxEntities,
@@ -40,6 +32,15 @@ export class DndManager {
   destroy() {
     this.resizeObserver.disconnect();
   }
+
+  recalcVisibleHitboxes = () => {
+    this.hitboxEntities.forEach((entity) => {
+      entity.recalcInitial();
+    });
+    this.scrollEntities.forEach((entity) => {
+      entity.recalcInitial();
+    });
+  };
 
   observeResize(element: HTMLElement) {
     this.resizeObserver.observe(element, { box: "border-box" });

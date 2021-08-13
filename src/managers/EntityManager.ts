@@ -1,6 +1,5 @@
 import { adjustHitbox, calculateHitbox, emptyDomRect } from "../util/hitbox";
 import {
-  CoordinateShift,
   Entity,
   EntityData,
   initialScrollShift,
@@ -20,6 +19,7 @@ export class EntityManager {
   children: Map<string, Child>;
   dndManager: DndManager;
   entityNode: HTMLElement;
+  measureNode: HTMLElement;
   getEntityData: () => EntityData;
   id: string;
   index: number;
@@ -32,6 +32,7 @@ export class EntityManager {
   constructor(
     dndManager: DndManager,
     entityNode: HTMLElement,
+    measureNode: HTMLElement,
     scopeId: string,
     id: string,
     index: number,
@@ -48,14 +49,15 @@ export class EntityManager {
     this.parent = parent;
     this.scrollParent = scrollParent;
     this.entityNode = entityNode;
+    this.measureNode = measureNode;
     this.getEntityData = getEntityData;
     this.sortManager = sortManager;
 
-    entityNode.dataset.hitboxid = id;
-    sortManager?.registerSortable(id, this.getEntity(emptyDomRect), entityNode);
+    measureNode.dataset.hitboxid = id;
+    sortManager?.registerSortable(id, this.getEntity(emptyDomRect), entityNode, measureNode);
 
     if (this.scrollParent) {
-      this.scrollParent.registerObserverHandler(id, entityNode, (entry) => {
+      this.scrollParent.registerObserverHandler(id, measureNode, (entry) => {
         if (entry.isIntersecting) {
           const entity = this.getEntity(entry.boundingClientRect);
           parent?.children.set(id, {
@@ -63,7 +65,7 @@ export class EntityManager {
             manager: this,
           });
 
-          dndManager.observeResize(entityNode);
+          dndManager.observeResize(measureNode);
 
           if (!parent || parent.isVisible) {
             dndManager.registerHitboxEntity(id, entity);
@@ -78,13 +80,13 @@ export class EntityManager {
             dndManager.unregisterHitboxEntity(childId);
           });
           parent?.children.delete(id);
-          dndManager.unobserveResize(entityNode);
+          dndManager.unobserveResize(measureNode);
           this.setVisibility(false);
         }
       });
     } else {
-      const entity = this.getEntity(entityNode.getBoundingClientRect());
-      dndManager.observeResize(entityNode);
+      const entity = this.getEntity(measureNode.getBoundingClientRect());
+      dndManager.observeResize(measureNode);
       dndManager.registerHitboxEntity(id, entity);
       parent?.children.set(id, {
         entity,
@@ -102,28 +104,15 @@ export class EntityManager {
   }
 
   destroy() {
-    this.dndManager.unobserveResize(this.entityNode);
+    this.dndManager.unobserveResize(this.measureNode);
     this.sortManager?.unregisterSortable(this.id);
-    this.scrollParent?.unregisterObserverHandler(this.id, this.entityNode);
+    this.scrollParent?.unregisterObserverHandler(this.id, this.measureNode);
     this.dndManager.unregisterHitboxEntity(this.id);
     this.parent?.children.delete(this.id);
   }
 
   getPath(): Path {
     return [...(this.parent?.getPath() || []), this.index];
-  }
-
-  getSortShift(): CoordinateShift | null {
-    if (this.sortManager?.isSorting && this.sortManager.shifted.has(this.id)) {
-      const dimensions = this.sortManager.hitboxDimensions;
-      const axis = this.sortManager.axis;
-      return {
-        x: axis === "horizontal" ? dimensions.width : 0,
-        y: axis === "vertical" ? dimensions.height : 0,
-      };
-    }
-
-    return null;
   }
 
   getEntity(rect: DOMRectReadOnly): Entity {
@@ -134,7 +123,7 @@ export class EntityManager {
         rect,
         manager.scrollParent?.scrollState || initialScrollState,
         manager.scrollParent?.getScrollShift() || initialScrollShift,
-        manager.getSortShift()
+        null
       ),
       getParentScrollState() {
         return manager.scrollParent?.scrollState || initialScrollState;
@@ -144,10 +133,10 @@ export class EntityManager {
       },
       recalcInitial() {
         this.initial = calculateHitbox(
-          manager.entityNode.getBoundingClientRect(),
+          manager.measureNode.getBoundingClientRect(),
           manager.scrollParent?.scrollState || initialScrollState,
           manager.scrollParent?.getScrollShift() || initialScrollShift,
-          manager.getSortShift()
+          null
         );
       },
       getHitbox() {

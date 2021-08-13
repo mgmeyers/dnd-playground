@@ -4,7 +4,7 @@ import { DndManager } from "./DndManager";
 import { DragEventData } from "./DragManager";
 import { getSiblingDirection, SiblingDirection } from "../util/path";
 
-type EntityAndElement = [Entity, HTMLElement];
+type EntityAndElement = [Entity, HTMLElement, HTMLElement];
 
 interface Dimensions {
   width: number;
@@ -50,9 +50,14 @@ export class SortManager {
     this.dndManager.dragManager.emitter.off("dragLeave", this.handleDragLeave);
   }
 
-  registerSortable(id: string, entity: Entity, el: HTMLElement) {
-    el.style.setProperty("transition", transitions.outOfTheWay);
-    this.sortables.set(id, [entity, el]);
+  registerSortable(
+    id: string,
+    entity: Entity,
+    el: HTMLElement,
+    measureEl: HTMLElement
+  ) {
+    el.style.setProperty("transition", transitions.none);
+    this.sortables.set(id, [entity, el, measureEl]);
   }
 
   unregisterSortable(id: string) {
@@ -61,22 +66,26 @@ export class SortManager {
 
   hitboxDimensions = emptyDimensions;
 
-  handleDragStart = ({ dragEntity, dragEntityMargin }: DragEventData) => {
+  handleDragStart = ({
+    dragEntity,
+    dragEntityMargin,
+    dragOriginHitbox,
+  }: DragEventData) => {
     const id = dragEntity?.getData().id;
     const haveDragEntity = id ? this.sortables.has(id) : null;
 
-    if (!dragEntity || !haveDragEntity) {
+    if (!dragEntity || !haveDragEntity || !dragOriginHitbox) {
       return;
     }
 
     this.isSorting = true;
 
     this.hitboxDimensions = this.getHitboxDimensions(
-      dragEntity.initial,
+      dragOriginHitbox,
       dragEntityMargin
     );
 
-    this.sortables.forEach(([entity, el]) => {
+    this.sortables.forEach(([entity, el, measureEl]) => {
       const siblingDirection = getSiblingDirection(
         dragEntity.getPath(),
         entity.getPath()
@@ -85,7 +94,7 @@ export class SortManager {
 
       if (siblingDirection === SiblingDirection.Self) {
         this.hidden.add(entityId);
-        return this.placeholdEl(el);
+        return this.placeholdEl(measureEl);
       }
 
       if (siblingDirection === SiblingDirection.After) {
@@ -110,6 +119,7 @@ export class SortManager {
     }
 
     clearTimeout(this.dragLeaveTimeout);
+    clearTimeout(this.dragEndTimeout);
 
     const dropHitbox = primaryIntersection?.getHitbox() || dragOriginHitbox;
     const dropDuration = getDropDuration({
@@ -130,7 +140,7 @@ export class SortManager {
         this.dndManager.onDrop(dragEntity, primaryIntersection);
       }
 
-      this.sortables.forEach(([entity, el]) => {
+      this.sortables.forEach(([entity, el, measure]) => {
         const entityId = entity.getData().id;
 
         if (this.shifted.has(entityId)) {
@@ -140,7 +150,7 @@ export class SortManager {
 
         if (this.hidden.has(entityId)) {
           this.hidden.delete(entityId);
-          this.resetEl(el, transitions.none);
+          this.resetEl(measure, transitions.none);
         }
       });
     }, dropDuration);
@@ -151,12 +161,18 @@ export class SortManager {
   handleDragEnter = ({
     dragEntity,
     dragEntityMargin,
+    dragOriginHitbox,
     primaryIntersection,
   }: DragEventData) => {
     const id = primaryIntersection?.getData().id;
     const haveSortable = id ? this.sortables.has(id) : null;
 
-    if (!dragEntity || !primaryIntersection || !haveSortable) {
+    if (
+      !dragEntity ||
+      !primaryIntersection ||
+      !haveSortable ||
+      !dragOriginHitbox
+    ) {
       return;
     }
 
@@ -168,7 +184,7 @@ export class SortManager {
 
     this.isSorting = true;
     this.hitboxDimensions = this.getHitboxDimensions(
-      dragEntity.initial,
+      dragOriginHitbox,
       dragEntityMargin
     );
     this.sortables.forEach(([entity, el]) => {

@@ -157,8 +157,11 @@ export class DragManager {
       this.dragPosition
     );
 
-    this.handleHitboxIntersect(dragHitbox, id, hitboxHitboxes, hitboxEntities);
-    this.handleScrollIntersect(dragHitbox, scrollHitboxes, scrollEntities);
+    const isScrolling = this.handleScrollIntersect(dragHitbox, scrollHitboxes, scrollEntities);
+
+    if (!isScrolling) {
+      this.handleHitboxIntersect(dragHitbox, id, hitboxHitboxes, hitboxEntities);
+    }
   }
 
   handleScrollIntersect(
@@ -235,6 +238,8 @@ export class DragManager {
         scrollEntityId
       );
     });
+
+    return !!(add.length + update.length)
   }
 
   handleHitboxIntersect(

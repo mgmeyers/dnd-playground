@@ -22,6 +22,8 @@ export function Scrollable({
   const parentScrollManager = React.useContext(ScrollManagerContext);
   const [scrollManager, setScrollManager] = React.useState<ScrollManager>();
 
+  // ok
+
   React.useEffect(() => {
     if (dndManager && scrollRef.current) {
       const manager = new ScrollManager(
@@ -34,7 +36,11 @@ export function Scrollable({
 
       setScrollManager(manager);
 
-      return () => manager.destroy();
+      return () => {
+        setTimeout(() => {
+          manager.destroy();
+        })
+      }
     }
   }, [dndManager, scopeId, scrollRef, triggerTypes, parentScrollManager]);
 

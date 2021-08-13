@@ -13,6 +13,7 @@ interface DraggableProps extends WithChildren {
   id: string;
   index: number;
   elementRef: React.MutableRefObject<HTMLElement | null>;
+  measureRef: React.MutableRefObject<HTMLElement | null>;
   data: EntityData;
 }
 
@@ -20,6 +21,7 @@ export function Droppable({
   id,
   index,
   elementRef,
+  measureRef,
   children,
   data,
 }: DraggableProps) {
@@ -30,13 +32,16 @@ export function Droppable({
   const parentScrollManager = React.useContext(ScrollManagerContext);
   const dataRef = React.useRef(data);
 
+  dataRef.current = data;
+
   const [entityManager, setEntityManager] = React.useState<EntityManager>();
 
   React.useEffect(() => {
-    if (dndManager && elementRef.current) {
+    if (dndManager && elementRef.current && measureRef.current) {
       const manager = new EntityManager(
         dndManager,
         elementRef.current,
+        measureRef.current,
         scopeId,
         id,
         index,
@@ -47,13 +52,13 @@ export function Droppable({
       );
 
       setEntityManager(manager);
-
       return () => manager.destroy();
     }
   }, [
     id,
     index,
     elementRef,
+    measureRef,
 
     //
     dndManager,

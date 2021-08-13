@@ -7,9 +7,10 @@ interface HitBoxDebugProps {
   hitbox: Hitbox;
   color: string;
   zIndex: number;
+  children?: React.ReactNode
 }
 
-function HitBoxDebug({ color, hitbox, zIndex }: HitBoxDebugProps) {
+function HitBoxDebug({ color, hitbox, zIndex, children }: HitBoxDebugProps) {
   const style: React.CSSProperties = {
     borderColor: color,
     transform: `translate3d(${hitbox[0]}px, ${hitbox[1]}px, 0px)`,
@@ -22,7 +23,7 @@ function HitBoxDebug({ color, hitbox, zIndex }: HitBoxDebugProps) {
     pointerEvents: "none",
   };
 
-  return <div className="hitbox" style={style}></div>;
+  return <div className="hitbox" style={style}>{children}</div>;
 }
 
 export function DebugScrollContainers() {
@@ -44,7 +45,7 @@ export function DebugScrollContainers() {
             color="#8787d3"
             key={id}
             hitbox={hb.getHitbox()}
-          />
+          >{id}</HitBoxDebug>
         );
       })}
     </>
