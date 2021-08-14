@@ -1,15 +1,13 @@
 import React from "react";
-import classcat from "classcat";
 import { moveEntity, TEST_BOARD } from "./util/data";
 import { DndContext } from "./components/DndContext";
 import { DragOverlay } from "./components/DragOverlay";
-import { Scrollable } from "./components/Scrollable";
 import { Droppable } from "./components/Droppable";
-import { Entity, EntityData, Item, Lane } from "./types";
+import { Entity, Item, Lane } from "./types";
 import { useDragHandle } from "./managers/DragManager";
 import { Sortable } from "./components/Sortable";
 import { SortPlaceholder } from "./components/SortPlaceholder";
-import { Debug, DebugScrollContainers } from "./Debug";
+import { ScrollContainer } from "./components/ScrollContainer";
 
 export function DragStage() {
   const [board, setBoard] = React.useState({
@@ -35,12 +33,14 @@ export function DragStage() {
         <div className="app-header">Lorem Ipsum</div>
         <div className="app-body">
           <ScrollContainer
+            id="lanes"
             className="board horizontal"
             triggerTypes={boardScrollTiggers}
           >
             <Sortable axis="horizontal">
               <Lanes lanes={board.children} />
               <SortPlaceholder
+                className="lane-placeholder"
                 accepts={lanePlaceholderTigger}
                 index={TEST_BOARD.length}
               />
@@ -79,7 +79,7 @@ export function DragStage() {
           return <div />;
         }}
       </DragOverlay>
-      <Debug />
+      {/* <Debug /> */}
       {/* <DebugScrollContainers /> */}
     </DndContext>
   );
@@ -117,17 +117,29 @@ const ItemComponent = React.memo(function ItemComponent({
   itemIndex: number;
   isStatic?: boolean;
 }) {
+  const elementRef = React.useRef<HTMLDivElement>(null);
+  const measureRef = React.useRef<HTMLDivElement>(null);
+
+  useDragHandle(measureRef, measureRef);
+
   return (
-    <DragDroppableContainer
-      className="item"
-      wrapperClassName="item-wrapper"
-      data={item}
-      id={item.id}
-      index={itemIndex}
-      isStatic={isStatic}
-    >
-      {item.id}: {item.data.title}
-    </DragDroppableContainer>
+    <div ref={measureRef} className="item-wrapper">
+      <div ref={elementRef} className="item">
+        {isStatic ? (
+          `${item.id}: ${item.data.title}`
+        ) : (
+          <Droppable
+            elementRef={elementRef}
+            measureRef={measureRef}
+            id={item.id}
+            index={itemIndex}
+            data={item}
+          >
+            {item.id}: {item.data.title}
+          </Droppable>
+        )}
+      </div>
+    </div>
   );
 });
 
@@ -164,8 +176,13 @@ const LaneComponent = React.memo(function LaneComponent({
   isStatic?: boolean;
 }) {
   const laneScrollTiggers = React.useMemo(() => ["item"], []);
+  const handleRef = React.useRef<HTMLDivElement>(null);
+  const elementRef = React.useRef<HTMLDivElement>(null);
+  const measureRef = React.useRef<HTMLDivElement>(null);
 
-  const content = (
+  useDragHandle(measureRef, handleRef);
+
+  const laneContent = (
     <>
       <Items items={lane.children} isStatic={isStatic} />
       {!isStatic && (
@@ -177,98 +194,45 @@ const LaneComponent = React.memo(function LaneComponent({
     </>
   );
 
-  return (
-    <DragDroppableContainer
-      className="lane"
-      wrapperClassName="lane-wrapper"
-      data={lane}
+  const laneBody = (
+    <ScrollContainer
       id={lane.id}
       index={laneIndex}
+      className="lane-items vertical"
+      triggerTypes={laneScrollTiggers}
       isStatic={isStatic}
     >
-      <div className="lane-title">
-        {lane.id}: {lane.data.title}
-      </div>
-      <ScrollContainer
-        className="lane-items vertical"
-        triggerTypes={laneScrollTiggers}
-        isStatic={isStatic}
-      >
-        {isStatic ? content : <Sortable axis="vertical">{content}</Sortable>}
-      </ScrollContainer>
-    </DragDroppableContainer>
-  );
-});
-
-interface ScrollContainerProps {
-  children?: React.ReactNode;
-  className?: string;
-  triggerTypes: string[];
-  isStatic?: boolean;
-}
-
-export function ScrollContainer({
-  className,
-  children,
-  triggerTypes,
-  isStatic,
-}: ScrollContainerProps) {
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-
-  return (
-    <div ref={scrollRef} className={classcat([className, "scroll-container"])}>
       {isStatic ? (
-        children
+        laneContent
       ) : (
-        <Scrollable scrollRef={scrollRef} triggerTypes={triggerTypes}>
-          {children}
-        </Scrollable>
+        <Sortable axis="vertical">{laneContent}</Sortable>
       )}
-    </div>
+    </ScrollContainer>
   );
-}
-
-interface DragDroppableContainerProps {
-  children?: React.ReactNode;
-  wrapperClassName?: string;
-  className?: string;
-  data: EntityData;
-  id: string;
-  index: number;
-  isStatic?: boolean;
-}
-
-export function DragDroppableContainer({
-  wrapperClassName,
-  className,
-  children,
-  id,
-  index,
-  data,
-  isStatic,
-}: DragDroppableContainerProps) {
-  const elementRef = React.useRef<HTMLDivElement>(null);
-  const measureRef = React.useRef<HTMLDivElement>(null);
-
-  useDragHandle(measureRef, measureRef);
 
   return (
-    <div ref={measureRef} className={wrapperClassName}>
-      <div ref={elementRef} className={className}>
+    <div ref={measureRef} className="lane-wrapper">
+      <div ref={elementRef} className="lane">
+        <div className="lane-title">
+          <div ref={handleRef} className="lane-drag-handle">
+            |||
+          </div>
+          {lane.id}: {lane.data.title}
+        </div>
         {isStatic ? (
-          children
+          laneBody
         ) : (
           <Droppable
             elementRef={elementRef}
             measureRef={measureRef}
-            id={id}
-            index={index}
-            data={data}
+            id={lane.id}
+            index={laneIndex}
+            data={lane}
           >
-            {children}
+            {laneBody}
           </Droppable>
         )}
       </div>
     </div>
   );
-}
+});

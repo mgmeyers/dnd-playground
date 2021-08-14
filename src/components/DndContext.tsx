@@ -3,6 +3,7 @@ import { DndManager } from "../managers/DndManager";
 import { Entity, WithChildren } from "../types";
 import { DndManagerContext } from "./context";
 import { Scope } from "./Scope";
+import { ScrollState } from "./ScrollStateContext";
 
 interface DndContextProps extends WithChildren {
   id?: string;
@@ -27,9 +28,11 @@ export function DndContext({ children, id, onDrop }: DndContextProps) {
 
   return (
     <Scope id={id}>
-      <DndManagerContext.Provider value={dndManager}>
-        {children}
-      </DndManagerContext.Provider>
+      <ScrollState>
+        <DndManagerContext.Provider value={dndManager}>
+          {children}
+        </DndManagerContext.Provider>
+      </ScrollState>
     </Scope>
   );
 }

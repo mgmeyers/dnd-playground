@@ -6,9 +6,10 @@ import { Droppable } from "./Droppable";
 interface SortPlaceholderProps {
   index: number;
   accepts: string[];
+  className?: string;
 }
 
-export function SortPlaceholder({ index, accepts }: SortPlaceholderProps) {
+export function SortPlaceholder({ index, accepts, className }: SortPlaceholderProps) {
   const elementRef = React.useRef<HTMLDivElement>(null);
   const measureRef = React.useRef<HTMLDivElement>(null);
 
@@ -21,7 +22,7 @@ export function SortPlaceholder({ index, accepts }: SortPlaceholderProps) {
   }, [accepts]);
 
   return (
-    <div ref={measureRef}>
+    <div ref={measureRef} className={className}>
       <div ref={elementRef} className="placeholder">
         <Droppable
           elementRef={elementRef}

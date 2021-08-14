@@ -79,7 +79,9 @@ export class DragManager {
   }
 
   dragStart(e: PointerEvent, referenceElement?: HTMLElement) {
-    const id = (e.currentTarget as HTMLElement).dataset.hitboxid;
+    const id =
+      referenceElement?.dataset.hitboxid ||
+      (e.currentTarget as HTMLElement).dataset.hitboxid;
 
     if (!id) return;
 
@@ -157,10 +159,19 @@ export class DragManager {
       this.dragPosition
     );
 
-    const isScrolling = this.handleScrollIntersect(dragHitbox, scrollHitboxes, scrollEntities);
+    const isScrolling = this.handleScrollIntersect(
+      dragHitbox,
+      scrollHitboxes,
+      scrollEntities
+    );
 
     if (!isScrolling) {
-      this.handleHitboxIntersect(dragHitbox, id, hitboxHitboxes, hitboxEntities);
+      this.handleHitboxIntersect(
+        dragHitbox,
+        id,
+        hitboxHitboxes,
+        hitboxEntities
+      );
     }
   }
 
@@ -239,7 +250,7 @@ export class DragManager {
       );
     });
 
-    return !!(add.length + update.length)
+    return !!(add.length + update.length);
   }
 
   handleHitboxIntersect(
@@ -293,7 +304,9 @@ export function useDragHandle(
     const droppable = droppableElement.current;
     const handle = handleElement.current;
 
-    if (!dndManager || !droppable || !handle) return;
+    if (!dndManager || !droppable || !handle) {
+      return;
+    }
 
     const onPointerDown = (e: PointerEvent) => {
       e.stopPropagation();
